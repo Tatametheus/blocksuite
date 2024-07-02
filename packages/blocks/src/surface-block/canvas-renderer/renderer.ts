@@ -40,17 +40,9 @@ type RendererOptions = {
 };
 
 export class Renderer extends Viewport {
-  canvas: HTMLCanvasElement;
-
-  ctx: CanvasRenderingContext2D;
-
-  rc: RoughCanvas;
-
-  layerManager: LayerManager;
-
-  provider: Partial<EnvProvider>;
-
-  stackingCanvasUpdated = new Slot<HTMLCanvasElement[]>();
+  get stackingCanvas() {
+    return this._stackingCanvas;
+  }
 
   private _stackingCanvas: HTMLCanvasElement[] = [];
 
@@ -60,9 +52,15 @@ export class Renderer extends Viewport {
 
   private _disposables = new DisposableGroup();
 
-  get stackingCanvas() {
-    return this._stackingCanvas;
-  }
+  canvas: HTMLCanvasElement;
+
+  ctx: CanvasRenderingContext2D;
+
+  layerManager: LayerManager;
+
+  provider: Partial<EnvProvider>;
+
+  stackingCanvasUpdated = new Slot<HTMLCanvasElement[]>();
 
   constructor(options: RendererOptions) {
     super();
@@ -71,7 +69,6 @@ export class Renderer extends Viewport {
 
     this.canvas = canvas;
     this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
-    this.rc = new RoughCanvas(canvas);
     this.layerManager = options.layerManager;
     this.provider = options.provider ?? {};
     this._initViewport();
@@ -149,26 +146,6 @@ export class Renderer extends Viewport {
     updateStackingCanvas();
   }
 
-  getVariableColor(val: string) {
-    return this.provider.getVariableColor?.(val) ?? val;
-  }
-
-  refresh() {
-    this._shouldUpdate = true;
-  }
-
-  /**
-   * Used to attach main canvas, main canvas will always exist
-   * @param container
-   */
-  attach(container: HTMLElement) {
-    this.setContainer(container);
-    container.append(this.canvas);
-
-    this._resetSize();
-    this._loop();
-  }
-
   /**
    * Specifying the actual size gives better results and more consistent behavior across browsers.
    *
@@ -217,7 +194,7 @@ export class Renderer extends Viewport {
   }
 
   private _render() {
-    const { ctx, viewportBounds, rc, zoom, cumulativeParentScale } = this;
+    const { ctx, viewportBounds, zoom, cumulativeParentScale } = this;
     const dpr = window.devicePixelRatio;
     const scale = zoom * dpr;
     const matrix = new DOMMatrix()
@@ -238,6 +215,7 @@ export class Renderer extends Viewport {
 
       const canvas = this._stackingCanvas[idx];
       const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+      const rc = new RoughCanvas(ctx.canvas);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
@@ -251,7 +229,14 @@ export class Renderer extends Viewport {
 
     ctx.setTransform(matrix);
 
-    this._renderByBound(ctx, matrix, rc, viewportBounds, fallbackElement, true);
+    this._renderByBound(
+      ctx,
+      matrix,
+      new RoughCanvas(ctx.canvas),
+      viewportBounds,
+      fallbackElement,
+      true
+    );
   }
 
   private _renderByBound(
@@ -284,7 +269,7 @@ export class Renderer extends Viewport {
         const dx = element.x - bound.x;
         const dy = element.y - bound.y;
 
-        renderFn(element, ctx, matrix.translate(dx, dy), this, bound);
+        renderFn(element, ctx, matrix.translate(dx, dy), this, rc, bound);
       }
 
       ctx.restore();
@@ -300,6 +285,26 @@ export class Renderer extends Viewport {
     }
 
     ctx.restore();
+  }
+
+  getVariableColor(val: string) {
+    return this.provider.getVariableColor?.(val) ?? val;
+  }
+
+  refresh() {
+    this._shouldUpdate = true;
+  }
+
+  /**
+   * Used to attach main canvas, main canvas will always exist
+   * @param container
+   */
+  attach(container: HTMLElement) {
+    this.setContainer(container);
+    container.append(this.canvas);
+
+    this._resetSize();
+    this._loop();
   }
 
   getCanvasByBound(

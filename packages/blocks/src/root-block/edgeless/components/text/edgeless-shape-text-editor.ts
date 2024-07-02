@@ -27,6 +27,21 @@ import { getSelectedRect } from '../../utils/query.js';
 
 @customElement('edgeless-shape-text-editor')
 export class EdgelessShapeTextEditor extends WithDisposable(ShadowlessElement) {
+  get inlineEditor() {
+    assertExists(this.richText.inlineEditor);
+    return this.richText.inlineEditor;
+  }
+
+  get inlineEditorContainer() {
+    return this.inlineEditor.rootElement;
+  }
+
+  private _lastXYWH = '';
+
+  private _keeping = false;
+
+  private _resizeObserver: ResizeObserver | null = null;
+
   @query('rich-text')
   accessor richText!: RichText;
 
@@ -43,25 +58,6 @@ export class EdgelessShapeTextEditor extends WithDisposable(ShadowlessElement) {
         edgeless: EdgelessRootBlockComponent
       ) => void)
     | undefined = undefined;
-
-  get inlineEditor() {
-    assertExists(this.richText.inlineEditor);
-    return this.richText.inlineEditor;
-  }
-
-  get inlineEditorContainer() {
-    return this.inlineEditor.rootElement;
-  }
-
-  private _lastXYWH = '';
-
-  private _keeping = false;
-
-  private _resizeObserver: ResizeObserver | null = null;
-
-  setKeeping(keeping: boolean) {
-    this._keeping = keeping;
-  }
 
   private _updateElementWH() {
     const bcr = this.richText.getBoundingClientRect();
@@ -107,6 +103,125 @@ export class EdgelessShapeTextEditor extends WithDisposable(ShadowlessElement) {
       elements: [this.element.id],
       editing: true,
     });
+  }
+
+  private _unmount() {
+    this._resizeObserver?.disconnect();
+    this._resizeObserver = null;
+
+    if (this.element.text) {
+      const text = this.element.text.toString();
+      const trimed = text.trim();
+      const len = trimed.length;
+      if (len === 0) {
+        this.element.text = undefined;
+      } else if (len < text.length) {
+        this.element.text = new DocCollection.Y.Text(trimed);
+      }
+    }
+
+    this.element.textDisplay = true;
+    this.element.group instanceof MindmapElementModel &&
+      this.element.group.layout();
+
+    this.remove();
+    this.edgeless.service.selection.set({
+      elements: [],
+      editing: false,
+    });
+  }
+
+  private _initMindmapKeyBindings() {
+    if (!this.element.surface.isInMindmap(this.element.id)) {
+      return;
+    }
+
+    const service = this.edgeless.service;
+
+    this._disposables.addFromEvent(this, 'keydown', evt => {
+      switch (evt.key) {
+        case 'Enter': {
+          evt.preventDefault();
+          const edgeless = this.edgeless;
+          const element = this.element;
+          const mindmap = this.element.group as MindmapElementModel;
+          const parent = mindmap.getParentNode(element.id) ?? element;
+          const id = mindmap.addNode(parent.id);
+
+          requestAnimationFrame(() => {
+            this.element = edgeless.service.getElementById(
+              id
+            ) as ShapeElementModel;
+            const element = this.element;
+            this.mountEditor?.(element, edgeless);
+
+            if (isElementOutsideViewport(service.viewport, element, [90, 20])) {
+              const [dx, dy] = getNearestTranslation(
+                edgeless.service.viewport,
+                element,
+                [100, 20]
+              );
+
+              edgeless.service.viewport.smoothTranslate(
+                service.viewport.centerX - dx,
+                service.viewport.centerY + dy
+              );
+            }
+          });
+
+          (this.ownerDocument.activeElement as HTMLElement).blur();
+          break;
+        }
+        case 'Tab': {
+          evt.preventDefault();
+          const edgeless = this.edgeless;
+          const element = this.element;
+          const mindmap = this.element.group as MindmapElementModel;
+          const id = mindmap.addNode(element.id);
+
+          requestAnimationFrame(() => {
+            this.element = edgeless.service.getElementById(
+              id
+            ) as ShapeElementModel;
+            const element = this.element;
+            this.mountEditor?.(element, edgeless);
+
+            if (isElementOutsideViewport(service.viewport, element, [90, 20])) {
+              const [dx, dy] = getNearestTranslation(
+                edgeless.service.viewport,
+                element,
+                [100, 20]
+              );
+
+              edgeless.service.viewport.smoothTranslate(
+                service.viewport.centerX - dx,
+                service.viewport.centerY + dy
+              );
+            }
+          });
+
+          (this.ownerDocument.activeElement as HTMLElement).blur();
+          break;
+        }
+        case 'Escape': {
+          const service = this.edgeless.service;
+          const element = this.element;
+
+          requestAnimationFrame(() => {
+            service.selection.set({
+              elements: [element.id],
+              editing: false,
+            });
+          });
+
+          (this.ownerDocument.activeElement as HTMLElement).blur();
+        }
+      }
+    });
+  }
+
+  setKeeping(keeping: boolean) {
+    this._keeping = keeping;
   }
 
   override connectedCallback() {
@@ -174,121 +289,6 @@ export class EdgelessShapeTextEditor extends WithDisposable(ShadowlessElement) {
     return result;
   }
 
-  private _unmount() {
-    this._resizeObserver?.disconnect();
-    this._resizeObserver = null;
-
-    if (this.element.text) {
-      const text = this.element.text.toString();
-      const trimed = text.trim();
-      const len = trimed.length;
-      if (len === 0) {
-        this.element.text = undefined;
-      } else if (len < text.length) {
-        this.element.text = new DocCollection.Y.Text(trimed);
-      }
-    }
-
-    this.element.textDisplay = true;
-    this.element.group instanceof MindmapElementModel &&
-      this.element.group.layout();
-
-    this.remove();
-    this.edgeless.service.selection.set({
-      elements: [],
-      editing: false,
-    });
-  }
-
-  private _initMindmapKeyBindings() {
-    if (!this.element.surface.isInMindmap(this.element.id)) {
-      return;
-    }
-
-    const service = this.edgeless.service;
-
-    this._disposables.addFromEvent(this, 'keydown', evt => {
-      switch (evt.key) {
-        case 'Enter': {
-          evt.preventDefault();
-          const edgeless = this.edgeless;
-          const element = this.element;
-          const mindmap = this.element.group as MindmapElementModel;
-          const parent = mindmap.getParentNode(element.id) ?? element;
-          const id = mindmap.addNode(parent.id);
-
-          requestAnimationFrame(() => {
-            this.element = edgeless.service.getElementById(
-              id
-            ) as ShapeElementModel;
-            const element = this.element;
-            this.mountEditor?.(element, edgeless);
-
-            if (isElementOutsideViewport(service.viewport, element, [20, 20])) {
-              const [dx, dy] = getNearestTranslation(
-                edgeless.service.viewport,
-                element,
-                [20, 20]
-              );
-
-              edgeless.service.viewport.smoothTranslate(
-                service.viewport.centerX - dx,
-                service.viewport.centerY + dy
-              );
-            }
-          });
-
-          (this.ownerDocument.activeElement as HTMLElement).blur();
-          break;
-        }
-        case 'Tab': {
-          evt.preventDefault();
-          const edgeless = this.edgeless;
-          const element = this.element;
-          const mindmap = this.element.group as MindmapElementModel;
-          const id = mindmap.addNode(element.id);
-
-          requestAnimationFrame(() => {
-            this.element = edgeless.service.getElementById(
-              id
-            ) as ShapeElementModel;
-            const element = this.element;
-            this.mountEditor?.(element, edgeless);
-
-            if (isElementOutsideViewport(service.viewport, element, [20, 20])) {
-              const [dx, dy] = getNearestTranslation(
-                edgeless.service.viewport,
-                element,
-                [20, 20]
-              );
-
-              edgeless.service.viewport.smoothTranslate(
-                service.viewport.centerX - dx,
-                service.viewport.centerY + dy
-              );
-            }
-          });
-
-          (this.ownerDocument.activeElement as HTMLElement).blur();
-          break;
-        }
-        case 'Escape': {
-          const service = this.edgeless.service;
-          const element = this.element;
-
-          requestAnimationFrame(() => {
-            service.selection.set({
-              elements: [element.id],
-              editing: false,
-            });
-          });
-
-          (this.ownerDocument.activeElement as HTMLElement).blur();
-        }
-      }
-    });
-  }
-
   override render() {
     if (!this.element.text) {
       throw new Error('Failed to mount shape editor because of no text.');
@@ -333,7 +333,7 @@ export class EdgelessShapeTextEditor extends WithDisposable(ShadowlessElement) {
       fontSize: this.element.fontSize + 'px',
       fontFamily: wrapFontFamily(this.element.fontFamily),
       fontWeight: this.element.fontWeight,
-      lineHeight: 'initial',
+      lineHeight: 'normal',
       outline: 'none',
       transform: `scale(${zoom}, ${zoom}) rotate(${rotate}deg)`,
       transformOrigin: 'top left',

@@ -29,8 +29,9 @@ export interface EdgelessDraggableElementOptions<T> {
   service: EdgelessRootService;
   /**
    * In which element that the target should be dragged out
+   * If not provided, recognized as the drag-out whenever dragging
    */
-  scopeElement: HTMLElement;
+  scopeElement?: HTMLElement;
   /**
    * The width of the element when placed to canvas
    * @default 100
@@ -56,9 +57,14 @@ export interface EdgelessDraggableElementOptions<T> {
   clickToDragScale?: number;
 
   /**
+   * To verify if the move is valid
+   */
+  isValidMove?: (offset: { x: number; y: number }) => boolean;
+
+  /**
    * when element is clicked - mouse down and up without moving
    */
-  onElementClick?: (e: ElementInfo<T>) => void;
+  onElementClick?: (element: ElementInfo<T>) => void;
   /**
    *  when mouse down and moved, create overlay, customize overlay here
    */
@@ -87,4 +93,8 @@ export type ElementInfo<T> = {
    * Override the value in {@link EdgelessDraggableElementOptions.standardWidth}
    */
   standardWidth?: number;
+};
+
+export const defaultIsValidMove = (offset: { x: number; y: number }) => {
+  return Math.abs(offset.x) > 50 || Math.abs(offset.y) > 50;
 };

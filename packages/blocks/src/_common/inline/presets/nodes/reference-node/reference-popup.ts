@@ -10,91 +10,28 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 
 import type { RootBlockComponent } from '../../../../../root-block/types.js';
+import { isPeekable, peek } from '../../../../components/index.js';
 import { createLitPortal } from '../../../../components/portal.js';
 import { BLOCK_ID_ATTR } from '../../../../consts.js';
 import { BookmarkIcon, MoreVerticalIcon } from '../../../../icons/index.js';
-import { EmbedWebIcon, LinkIcon, OpenIcon } from '../../../../icons/text.js';
+import {
+  CenterPeekIcon,
+  EmbedWebIcon,
+  LinkIcon,
+  OpenIcon,
+} from '../../../../icons/text.js';
+import { isInsideBlockByFlavour } from '../../../../utils/model.js';
 import type { AffineInlineEditor } from '../../affine-inline-specs.js';
 import { ReferencePopupMoreMenu } from './reference-popup-more-menu-popup.js';
 import { styles } from './styles.js';
 
 @customElement('reference-popup')
 export class ReferencePopup extends WithDisposable(LitElement) {
-  static override styles = styles;
-
-  @property({ attribute: false })
-  accessor target!: LitElement;
-
-  @property({ attribute: false })
-  accessor inlineEditor!: AffineInlineEditor;
-
-  @property({ attribute: false })
-  accessor targetInlineRange!: InlineRange;
-
-  @property({ attribute: false })
-  accessor docTitle!: string;
-
-  @property({ attribute: false })
-  accessor abortController!: AbortController;
-
-  @query('.affine-reference-popover-container')
-  accessor popupContainer!: HTMLDivElement;
-
   get referenceDocId() {
     const docId = this.inlineEditor.getFormat(this.targetInlineRange).reference
       ?.pageId;
     assertExists(docId);
     return docId;
-  }
-
-  private _moreMenuAbortController: AbortController | null = null;
-
-  override connectedCallback() {
-    super.connectedCallback();
-
-    if (this.targetInlineRange.length === 0) {
-      throw new Error('Cannot toggle reference popup on empty range');
-    }
-
-    const parent = this.blockElement.host.doc.getParent(
-      this.blockElement.model
-    );
-    assertExists(parent);
-
-    this.disposables.add(
-      parent.childrenUpdated.on(() => {
-        const children = parent.children;
-        if (children.includes(this.blockElement.model)) return;
-        this.abortController.abort();
-      })
-    );
-  }
-
-  override updated() {
-    assertExists(this.popupContainer);
-    const range = this.inlineEditor.toDomRange(this.targetInlineRange);
-    assertExists(range);
-
-    const visualElement = {
-      getBoundingClientRect: () => range.getBoundingClientRect(),
-      getClientRects: () => range.getClientRects(),
-    };
-    computePosition(visualElement, this.popupContainer, {
-      middleware: [
-        offset(10),
-        inline(),
-        shift({
-          padding: 6,
-        }),
-      ],
-    })
-      .then(({ x, y }) => {
-        const popupContainer = this.popupContainer;
-        if (!popupContainer) return;
-        popupContainer.style.left = `${x}px`;
-        popupContainer.style.top = `${y}px`;
-      })
-      .catch(console.error);
   }
 
   get blockElement() {
@@ -117,9 +54,48 @@ export class ReferencePopup extends WithDisposable(LitElement) {
     return doc;
   }
 
-  get _isInsideEmbedSyncedDocBlock() {
-    return !!this.blockElement.closest('affine-embed-synced-doc-block');
+  get _embedViewButtonDisabled() {
+    if (
+      this.blockElement.doc.readonly ||
+      isInsideBlockByFlavour(
+        this.blockElement.doc,
+        this.blockElement.model,
+        'affine:edgeless-text'
+      )
+    ) {
+      return true;
+    }
+    return (
+      !!this.blockElement.closest('affine-embed-synced-doc-block') ||
+      this.referenceDocId === this.doc.id
+    );
   }
+
+  get _openButtonDisabled() {
+    return this.referenceDocId === this.doc.id;
+  }
+
+  static override styles = styles;
+
+  private _moreMenuAbortController: AbortController | null = null;
+
+  @property({ attribute: false })
+  accessor target!: LitElement;
+
+  @property({ attribute: false })
+  accessor inlineEditor!: AffineInlineEditor;
+
+  @property({ attribute: false })
+  accessor targetInlineRange!: InlineRange;
+
+  @property({ attribute: false })
+  accessor docTitle!: string;
+
+  @property({ attribute: false })
+  accessor abortController!: AbortController;
+
+  @query('.affine-reference-popover-container')
+  accessor popupContainer!: HTMLDivElement;
 
   private _openDoc() {
     const refDocId = this.referenceDocId;
@@ -212,6 +188,54 @@ export class ReferencePopup extends WithDisposable(LitElement) {
     });
   }
 
+  override connectedCallback() {
+    super.connectedCallback();
+
+    if (this.targetInlineRange.length === 0) {
+      throw new Error('Cannot toggle reference popup on empty range');
+    }
+
+    const parent = this.blockElement.host.doc.getParent(
+      this.blockElement.model
+    );
+    assertExists(parent);
+
+    this.disposables.add(
+      parent.childrenUpdated.on(() => {
+        const children = parent.children;
+        if (children.includes(this.blockElement.model)) return;
+        this.abortController.abort();
+      })
+    );
+  }
+
+  override updated() {
+    assertExists(this.popupContainer);
+    const range = this.inlineEditor.toDomRange(this.targetInlineRange);
+    assertExists(range);
+
+    const visualElement = {
+      getBoundingClientRect: () => range.getBoundingClientRect(),
+      getClientRects: () => range.getClientRects(),
+    };
+    computePosition(visualElement, this.popupContainer, {
+      middleware: [
+        offset(10),
+        inline(),
+        shift({
+          padding: 6,
+        }),
+      ],
+    })
+      .then(({ x, y }) => {
+        const popupContainer = this.popupContainer;
+        if (!popupContainer) return;
+        popupContainer.style.left = `${x}px`;
+        popupContainer.style.top = `${y}px`;
+      })
+      .catch(console.error);
+  }
+
   override render() {
     // synced doc entry controlled by awareness flag
     const isSyncedDocEnabled = this.doc.awarenessStore.getFlag(
@@ -226,12 +250,23 @@ export class ReferencePopup extends WithDisposable(LitElement) {
               size="24px"
               class="affine-reference-popover-open-button"
               @click=${this._openDoc}
+              ?disabled=${this._openButtonDisabled}
             >
               ${OpenIcon}
-              <affine-tooltip .offset=${12}
-                >${'Click to open doc'}</affine-tooltip
-              >
+              <affine-tooltip .offset=${12}>${'Open this doc'}</affine-tooltip>
             </icon-button>
+            ${isPeekable(this.target)
+              ? html`<icon-button
+                  size="24px"
+                  class="affine-reference-popover-open-button"
+                  @click=${() => peek(this.target)}
+                >
+                  ${CenterPeekIcon}
+                  <affine-tooltip .offset=${12}
+                    >${'Open in center peek'}</affine-tooltip
+                  >
+                </icon-button>`
+              : nothing}
 
             <span class="affine-reference-popover-dividing-line"></span>
 
@@ -262,7 +297,7 @@ export class ReferencePopup extends WithDisposable(LitElement) {
                       class="affine-reference-popover-view-selector-button embed embed-view"
                       .hover=${false}
                       @click=${() => this._convertToEmbedView()}
-                      ?disabled=${this._isInsideEmbedSyncedDocBlock}
+                      ?disabled=${this._embedViewButtonDisabled}
                     >
                       ${EmbedWebIcon}
                       <affine-tooltip .offset=${12}

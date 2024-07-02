@@ -1,5 +1,6 @@
+import { assertExists } from '@blocksuite/global/utils';
 import { css, html, LitElement, nothing } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { styleMap } from 'lit/directives/style-map.js';
@@ -20,13 +21,16 @@ import type { DraggableShape } from './utils.js';
 import { buildVariablesObject } from './utils.js';
 
 const shapes: DraggableShape[] = [];
+// to move shapes together
+const oy = -2;
+const ox = 0;
 shapes.push({
   name: 'roundedRect',
   svg: roundedSvg,
   style: {
-    default: { x: -9, y: 10 },
-    hover: { y: -1, z: 1 },
-    next: { y: 64 },
+    default: { x: -9, y: 6 },
+    hover: { y: -5, z: 1 },
+    next: { y: 60 },
   },
 });
 shapes.push({
@@ -42,19 +46,27 @@ shapes.push({
   name: ShapeType.Triangle,
   svg: triangleSvg,
   style: {
-    default: { x: 18, y: 15 },
+    default: { x: 18, y: 25 },
     hover: { y: 7, z: 1 },
     next: { y: 64 },
   },
+});
+shapes.forEach(s => {
+  Object.values(s.style).forEach(style => {
+    if (style.y) (style.y as number) += oy;
+    if (style.x) (style.x as number) += ox;
+  });
 });
 
 @customElement('edgeless-toolbar-shape-draggable')
 export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
   LitElement
 ) {
-  draggableController!: EdgelessDraggableElementController<DraggableShape>;
-
-  override type = 'shape' as const;
+  get shapeShadow() {
+    return this.theme === 'dark'
+      ? '0 0 7px rgba(0, 0, 0, .22)'
+      : '0 0 5px rgba(0, 0, 0, .2)';
+  }
 
   static override styles = css`
     :host {
@@ -92,6 +104,9 @@ export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
       z-index: var(--default-z, 0);
       pointer-events: none;
     }
+    .shape svg {
+      display: block;
+    }
     .shape svg path,
     .shape svg circle,
     .shape svg rect {
@@ -116,11 +131,9 @@ export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
     }
   `;
 
-  get shapeShadow() {
-    return this.theme === 'dark'
-      ? '0 0 7px rgba(0, 0, 0, .22)'
-      : '0 0 5px rgba(0, 0, 0, .2)';
-  }
+  draggableController!: EdgelessDraggableElementController<DraggableShape>;
+
+  override type = 'shape' as const;
 
   @property({ attribute: false })
   accessor color!: string;
@@ -131,6 +144,21 @@ export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
   @property({ attribute: false })
   accessor onShapeClick: (shape: DraggableShape) => void = () => {};
 
+  @state()
+  accessor readyToDrop = false;
+
+  @query('.edgeless-shape-draggable')
+  accessor shapeContainer!: HTMLDivElement;
+
+  draggingShape: DraggableShape['name'] = 'roundedRect';
+
+  private _setShapeOverlayLock(lock: boolean) {
+    const controller = this.edgeless.tools.currentController;
+    if (controller instanceof ShapeToolController) {
+      controller.setDisableOverlay(lock);
+    }
+  }
+
   initDragController() {
     if (!this.edgeless || !this.toolbarContainer) return;
     if (this.draggableController) return;
@@ -139,7 +167,8 @@ export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
       edgeless: this.edgeless,
       scopeElement: this.toolbarContainer,
       standardWidth: 100,
-      onOverlayCreated: overlay => {
+      clickToDrag: true,
+      onOverlayCreated: (overlay, element) => {
         Object.assign(overlay.element.style, {
           color: this.color,
           stroke: this.stroke,
@@ -148,18 +177,46 @@ export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
         if (controller instanceof ShapeToolController) {
           controller.clearOverlay();
         }
+        overlay.element.style.filter = `drop-shadow(${this.shapeShadow})`;
+        this.readyToDrop = true;
+        this.draggingShape = element.data.name;
       },
       onDrop: (el, bound) => {
         const xywh = bound.serialize();
         const shape = el.data;
-        this.edgeless.service.addElement(CanvasElementType.SHAPE, {
+        const id = this.edgeless.service.addElement(CanvasElementType.SHAPE, {
           shapeType: shape.name === 'roundedRect' ? ShapeType.Rect : shape.name,
           xywh,
           radius: shape.name === 'roundedRect' ? 0.1 : 0,
         });
+
+        this.edgeless.service.telemetryService?.track('CanvasElementAdded', {
+          control: 'toolbar:dnd',
+          page: 'whiteboard editor',
+          module: 'toolbar',
+          segment: 'toolbar',
+          type: 'shape',
+          other: {
+            shapeType:
+              shape.name === 'roundedRect' ? ShapeType.Rect : shape.name,
+          },
+        });
+
+        this._setShapeOverlayLock(false);
+        this.readyToDrop = false;
+
+        this.edgeless.service.tool.setEdgelessTool(
+          { type: 'default' },
+          { elements: [id], editing: false }
+        );
+      },
+      onCanceled: () => {
+        this._setShapeOverlayLock(false);
+        this.readyToDrop = false;
       },
       onElementClick: el => {
         this.onShapeClick?.(el.data);
+        this._setShapeOverlayLock(true);
       },
       onEnterOrLeaveScope: (overlay, isOutside) => {
         overlay.element.style.filter = isOutside
@@ -167,6 +224,41 @@ export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
           : `drop-shadow(${this.shapeShadow})`;
       },
     });
+
+    this._disposables.add(
+      this.edgeless.bindHotKey(
+        {
+          s: ctx => {
+            // `page.keyboard.press('Shift+s')` in playwright will also trigger this 's' key event
+            if (ctx.get('keyboardState').raw.shiftKey) return;
+
+            const service = this.edgeless.service;
+            if (service.locked || service.selection.editing) return;
+
+            if (this.readyToDrop) {
+              const activeIndex = shapes.findIndex(
+                s => s.name === this.draggingShape
+              );
+              const nextIndex = (activeIndex + 1) % shapes.length;
+              const next = shapes[nextIndex];
+              this.draggingShape = next.name;
+
+              this.draggableController.cancelWithoutAnimation();
+            }
+
+            const el = this.shapeContainer.querySelector(
+              `.shape.${this.draggingShape}`
+            ) as HTMLElement;
+            assertExists(el, 'Edgeless toolbar Shape element not found');
+            const { x, y } = service.tool.lastMousePos;
+            const { left, top } = this.edgeless.viewport;
+            const clientPos = { x: x + left, y: y + top };
+            this.draggableController.clickToDrag(el, clientPos);
+          },
+        },
+        { global: true }
+      )
+    );
   }
 
   override updated(_changedProperties: Map<PropertyKey, unknown>) {
@@ -214,6 +306,7 @@ export class EdgelessToolbarShapeDraggable extends EdgelessToolbarToolMixin(
               style=${currStyle}
               class=${classMap({
                 shape: true,
+                [shape.name]: true,
                 cancel: isBeingDragged && !dragOut,
               })}
               @mousedown=${(e: MouseEvent) =>

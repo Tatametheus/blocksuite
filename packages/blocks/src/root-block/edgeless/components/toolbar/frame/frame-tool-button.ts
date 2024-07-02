@@ -9,14 +9,12 @@ import {
   ArrowUpIcon,
   LargeFrameIcon,
 } from '../../../../../_common/icons/index.js';
-import type { EdgelessTool } from '../../../../../_common/utils/index.js';
 import { getTooltipWithShortcut } from '../../../components/utils.js';
+import type { EdgelessTool } from '../../../types.js';
 import { QuickToolMixin } from '../mixins/quick-tool.mixin.js';
 
 @customElement('edgeless-frame-tool-button')
 export class EdgelessFrameToolButton extends QuickToolMixin(LitElement) {
-  override type: EdgelessTool['type'] = 'frame';
-
   static override styles = css`
     :host {
       display: flex;
@@ -29,6 +27,8 @@ export class EdgelessFrameToolButton extends QuickToolMixin(LitElement) {
       font-size: 0;
     }
   `;
+
+  override type: EdgelessTool['type'] = 'frame';
 
   private _toggleFrameMenu() {
     if (this.tryDisposePopper()) return;
@@ -49,10 +49,9 @@ export class EdgelessFrameToolButton extends QuickToolMixin(LitElement) {
         .active=${type === 'frame'}
         .iconContainerPadding=${6}
         @click=${() => {
-          this.setEdgelessTool({
-            type: 'frame',
-          });
+          // don't update tool before toggling menu
           this._toggleFrameMenu();
+          this.setEdgelessTool({ type: 'frame' });
         }}
       >
         ${LargeFrameIcon}

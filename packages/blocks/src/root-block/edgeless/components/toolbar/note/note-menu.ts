@@ -7,21 +7,19 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { AttachmentIcon, LinkIcon } from '../../../../../_common/icons/text.js';
 import {
-  type EdgelessTool,
   getImageFilesFromLocal,
   type NoteChildrenFlavour,
-  type NoteTool,
   openFileOrFiles,
 } from '../../../../../_common/utils/index.js';
 import { ImageIcon } from '../../../../../image-block/styles.js';
+import type { NoteTool } from '../../../controllers/tools/note-tool.js';
+import type { EdgelessTool } from '../../../types.js';
 import { getTooltipWithShortcut } from '../../utils.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 import { NOTE_MENU_ITEMS } from './note-menu-config.js';
 
 @customElement('edgeless-note-menu')
 export class EdgelessNoteMenu extends EdgelessToolbarToolMixin(LitElement) {
-  override type: EdgelessTool['type'] = 'affine:note';
-
   static override styles = css`
     :host {
       position: absolute;
@@ -53,6 +51,11 @@ export class EdgelessNoteMenu extends EdgelessToolbarToolMixin(LitElement) {
     }
   `;
 
+  @state()
+  private accessor _imageLoading = false;
+
+  override type: EdgelessTool['type'] = 'affine:note';
+
   @property({ attribute: false })
   accessor childFlavour!: NoteChildrenFlavour;
 
@@ -71,14 +74,42 @@ export class EdgelessNoteMenu extends EdgelessToolbarToolMixin(LitElement) {
     }>
   ) => void;
 
-  @state()
-  private accessor _imageLoading = false;
-
   private async _addImages() {
     this._imageLoading = true;
     const imageFiles = await getImageFilesFromLocal();
-    await this.edgeless.addImages(imageFiles);
+    const ids = await this.edgeless.addImages(imageFiles);
     this._imageLoading = false;
+    this.edgeless.service.tool.setEdgelessTool(
+      { type: 'default' },
+      { elements: ids, editing: false }
+    );
+  }
+
+  private _onHandleLinkButtonClick() {
+    const { insertedLinkType } = this.edgeless.service.std.command.exec(
+      'insertLinkByQuickSearch'
+    );
+
+    insertedLinkType
+      ?.then(type => {
+        if (type) {
+          this.edgeless.service.telemetryService?.track('CanvasElementAdded', {
+            control: 'toolbar:general',
+            page: 'whiteboard editor',
+            module: 'toolbar',
+            type: type.flavour.split(':')[1],
+          });
+          if (type.isNewDoc) {
+            this.edgeless.service.telemetryService?.track('DocCreated', {
+              control: 'toolbar:general',
+              page: 'whiteboard editor',
+              module: 'edgeless toolbar',
+              type: type.flavour.split(':')[1],
+            });
+          }
+        }
+      })
+      .catch(console.error);
   }
 
   override firstUpdated() {
@@ -117,9 +148,7 @@ export class EdgelessNoteMenu extends EdgelessToolbarToolMixin(LitElement) {
               .activeMode=${'background'}
               .tooltip=${getTooltipWithShortcut('Link', '@')}
               @click=${() => {
-                this.edgeless.service.std.command.exec(
-                  'insertLinkByQuickSearch'
-                );
+                this._onHandleLinkButtonClick();
               }}
             >
               ${LinkIcon}
@@ -132,6 +161,17 @@ export class EdgelessNoteMenu extends EdgelessToolbarToolMixin(LitElement) {
                 const file = await openFileOrFiles();
                 if (!file) return;
                 await this.edgeless.addAttachments([file]);
+                this.edgeless.service.tool.setEdgelessTool({ type: 'default' });
+                this.edgeless.service.telemetryService?.track(
+                  'CanvasElementAdded',
+                  {
+                    control: 'toolbar:general',
+                    page: 'whiteboard editor',
+                    module: 'toolbar',
+                    segment: 'toolbar',
+                    type: 'attachment',
+                  }
+                );
               }}
             >
               ${AttachmentIcon}

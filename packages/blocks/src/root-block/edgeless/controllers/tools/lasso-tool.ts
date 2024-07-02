@@ -1,12 +1,7 @@
 import type { PointerEventState } from '@blocksuite/block-std';
 import { noop } from '@blocksuite/global/utils';
 
-import {
-  type EdgelessTool,
-  type IPoint,
-  LassoMode,
-  type LassoTool,
-} from '../../../../_common/types.js';
+import { type IPoint, LassoMode } from '../../../../_common/types.js';
 import { Bound } from '../../../../surface-block/index.js';
 import {
   getBoundFromPoints,
@@ -21,7 +16,8 @@ import {
   pointInPolygon,
   rotatePoints,
 } from '../../../../surface-block/utils/math-utils.js';
-import { EdgelessToolController } from './index.js';
+import type { EdgelessTool } from '../../types.js';
+import { EdgelessToolController } from './edgeless-tool.js';
 
 class LassoOverlay extends Overlay {
   d = '';
@@ -58,10 +54,19 @@ class LassoOverlay extends Overlay {
   }
 }
 
+export type LassoTool = {
+  type: 'lasso';
+  mode: LassoMode;
+};
+
 export class LassoToolController extends EdgelessToolController<LassoTool> {
-  readonly tool = {
-    type: 'lasso',
-  } as LassoTool;
+  get selection() {
+    return this._edgeless.service.selection;
+  }
+
+  get isSelecting() {
+    return this._isSelecting;
+  }
 
   private _overlay = new LassoOverlay();
 
@@ -75,17 +80,9 @@ export class LassoToolController extends EdgelessToolController<LassoTool> {
 
   private _currentSelectionState = new Set<string>(); // to finalize the selection
 
-  get selection() {
-    return this._edgeless.service.selection;
-  }
-
-  get isSelecting() {
-    return this._isSelecting;
-  }
-
-  abort() {
-    this._reset();
-  }
+  readonly tool = {
+    type: 'lasso',
+  } as LassoTool;
 
   private toModelCoord(p: IPoint): IVec {
     return this._service.viewport.toModelCoord(p.x, p.y);
@@ -199,6 +196,10 @@ export class LassoToolController extends EdgelessToolController<LassoTool> {
         break;
     }
     this._setSelectionState(Array.from(set), false);
+  }
+
+  abort() {
+    this._reset();
   }
 
   // For Freehand Mode =
@@ -335,5 +336,13 @@ export class LassoToolController extends EdgelessToolController<LassoTool> {
 
   override onPressSpaceBar(): void {
     noop();
+  }
+}
+
+declare global {
+  namespace BlockSuite {
+    interface EdgelessToolMap {
+      lasso: LassoToolController;
+    }
   }
 }

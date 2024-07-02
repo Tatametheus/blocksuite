@@ -1,5 +1,6 @@
 import { groupBy } from '../../../_common/utils/iterable.js';
 import type { EdgelessTextBlockModel } from '../../../edgeless-text/edgeless-text-model.js';
+import type { EmbedSyncedDocModel } from '../../../embed-synced-doc-block/index.js';
 import type { FrameBlockModel } from '../../../frame-block/index.js';
 import type { ImageBlockModel } from '../../../image-block/index.js';
 import type { NoteBlockModel } from '../../../note-block/index.js';
@@ -9,6 +10,7 @@ import { getCloneElements, prepareCloneData } from './clone-utils.js';
 import { getElementsWithoutGroup } from './group.js';
 import {
   isEdgelessTextBlock,
+  isEmbedSyncedDocBlock,
   isFrameBlock,
   isImageBlock,
   isNoteBlock,
@@ -29,13 +31,13 @@ export async function duplicate(
   totalBound.x += totalBound.w + offset;
 
   const snapshot = await prepareCloneData(copyElements, edgeless.std);
-  const [canvasElements, blocks] =
+  const { canvasElements, blockModels } =
     await clipboardController.createElementsFromClipboardData(
-      snapshot as Record<string, unknown>[],
+      snapshot,
       totalBound.center
     );
 
-  const newElements = [...canvasElements, ...blocks];
+  const newElements = [...canvasElements, ...blockModels];
 
   edgeless.surface.fitToViewport(totalBound);
 
@@ -47,9 +49,8 @@ export async function duplicate(
   }
 }
 export const splitElements = (elements: BlockSuite.EdgelessModelType[]) => {
-  const { notes, frames, shapes, images, edgelessText } = groupBy(
-    getElementsWithoutGroup(elements),
-    element => {
+  const { notes, frames, shapes, images, edgelessTexts, embedSyncedDocs } =
+    groupBy(getElementsWithoutGroup(elements), element => {
       if (isNoteBlock(element)) {
         return 'notes';
       } else if (isFrameBlock(element)) {
@@ -57,23 +58,26 @@ export const splitElements = (elements: BlockSuite.EdgelessModelType[]) => {
       } else if (isImageBlock(element)) {
         return 'images';
       } else if (isEdgelessTextBlock(element)) {
-        return 'edgelessText';
+        return 'edgelessTexts';
+      } else if (isEmbedSyncedDocBlock(element)) {
+        return 'embedSyncedDocs';
       }
       return 'shapes';
-    }
-  ) as {
-    notes: NoteBlockModel[];
-    shapes: BlockSuite.SurfaceModelType[];
-    frames: FrameBlockModel[];
-    images: ImageBlockModel[];
-    edgelessText: EdgelessTextBlockModel[];
-  };
+    }) as {
+      notes: NoteBlockModel[];
+      shapes: BlockSuite.SurfaceModelType[];
+      frames: FrameBlockModel[];
+      images: ImageBlockModel[];
+      edgelessTexts: EdgelessTextBlockModel[];
+      embedSyncedDocs: EmbedSyncedDocModel[];
+    };
 
   return {
     notes: notes ?? [],
     shapes: shapes ?? [],
     frames: frames ?? [],
     images: images ?? [],
-    edgelessText: edgelessText ?? [],
+    edgelessTexts: edgelessTexts ?? [],
+    embedSyncedDocs: embedSyncedDocs ?? [],
   };
 };

@@ -11,7 +11,6 @@ import { customElement } from 'lit/decorators.js';
 import {
   getCurrentNativeRange,
   getInlineEditorByModel,
-  isControlledKeyboardEvent,
   matchFlavours,
 } from '../../../_common/utils/index.js';
 import { isRootElement } from '../../utils/guard.js';
@@ -103,51 +102,12 @@ export class AffineSlashMenuWidget extends WidgetElement {
 
   config = AffineSlashMenuWidget.DEFAULT_CONFIG;
 
-  override connectedCallback() {
-    super.connectedCallback();
+  private _onBeforeInput = (ctx: UIEventStateContext) => {
+    const eventState = ctx.get('defaultState');
+    const event = eventState.event as InputEvent;
 
-    if (this.config.triggerKeys.some(key => key.length === 0)) {
-      throw new Error('Trigger key of slash menu should not be empty string');
-    }
-
-    this.handleEvent('keyDown', this._onKeyDown);
-  }
-
-  private _getTriggerKey = (event: KeyboardEvent) => {
-    if (isControlledKeyboardEvent(event) || event.shiftKey) return undefined;
-
-    const { triggerKeys } = this.config;
-
-    /** The case of IME input
-     * 1. under IME mode
-     * 2. Before IME start input
-     * 3. press a key
-     * 4. the pressed key in `triggerKeys`
-     */
-    let currTriggerKey: string | undefined;
-
-    if (
-      event.key === 'Process' &&
-      !event.isComposing &&
-      event.code === 'Slash' && // TODO may be not slash
-      triggerKeys.includes('/')
-    ) {
-      currTriggerKey = '/';
-    }
-    // The normal case
-    else {
-      currTriggerKey = triggerKeys.find(key => key === event.key);
-    }
-
-    return currTriggerKey;
-  };
-
-  private _onKeyDown = (ctx: UIEventStateContext) => {
-    const eventState = ctx.get('keyboardState');
-    const event = eventState.raw;
-
-    const triggerKey = this._getTriggerKey(event);
-    if (!triggerKey) return;
+    const triggerKey = event.data;
+    if (!triggerKey || !this.config.triggerKeys.includes(triggerKey)) return;
 
     const textSelection = this.host.selection.find('text');
     if (!textSelection) return;
@@ -191,6 +151,16 @@ export class AffineSlashMenuWidget extends WidgetElement {
       });
     });
   };
+
+  override connectedCallback() {
+    super.connectedCallback();
+
+    if (this.config.triggerKeys.some(key => key.length === 0)) {
+      throw new Error('Trigger key of slash menu should not be empty string');
+    }
+
+    this.handleEvent('beforeInput', this._onBeforeInput);
+  }
 }
 
 declare global {

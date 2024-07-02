@@ -43,27 +43,39 @@ import { customElement, property, state } from 'lit/decorators.js';
  */
 @customElement('smooth-corner')
 export class SmoothCorner extends LitElement {
-  private _resizeObserver: ResizeObserver | null = null;
-
-  constructor() {
-    super();
-    this._resizeObserver = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        this.width = entry.contentRect.width;
-        this.height = entry.contentRect.height;
-      }
+  get _path() {
+    // return curvePath(this._points);
+    return getSvgPath({
+      width: this.width,
+      height: this.height,
+      cornerRadius: this.borderRadius, // defaults to 0
+      cornerSmoothing: this.smooth, // cornerSmoothing goes from 0 to 1
     });
   }
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this._resizeObserver?.observe(this);
-  }
+  static override styles = css`
+    :host {
+      position: relative;
+    }
+    .smooth-corner-bg,
+    .smooth-corner-border {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+    .smooth-corner-border {
+      z-index: 2;
+    }
+    .smooth-corner-content {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+    }
+  `;
 
-  override disconnectedCallback(): void {
-    super.disconnectedCallback();
-    this._resizeObserver?.unobserve(this);
-  }
+  private _resizeObserver: ResizeObserver | null = null;
 
   /**
    * Equal to the border-radius
@@ -107,13 +119,13 @@ export class SmoothCorner extends LitElement {
   @state()
   accessor height: number = 0;
 
-  get _path() {
-    // return curvePath(this._points);
-    return getSvgPath({
-      width: this.width,
-      height: this.height,
-      cornerRadius: this.borderRadius, // defaults to 0
-      cornerSmoothing: this.smooth, // cornerSmoothing goes from 0 to 1
+  constructor() {
+    super();
+    this._resizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        this.width = entry.contentRect.width;
+        this.height = entry.contentRect.height;
+      }
     });
   }
 
@@ -131,6 +143,16 @@ export class SmoothCorner extends LitElement {
     </svg>`;
   }
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this._resizeObserver?.observe(this);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._resizeObserver?.unobserve(this);
+  }
+
   override render() {
     return html`${this._getSvg(
         'smooth-corner-bg',
@@ -141,9 +163,6 @@ export class SmoothCorner extends LitElement {
           transform="translate(${this.borderWidth / 2} ${this.borderWidth / 2})"
         >`
       )}
-      <div class="smooth-corner-content">
-        <slot></slot>
-      </div>
       ${this._getSvg(
         'smooth-corner-border',
         svg`<path 
@@ -153,30 +172,11 @@ export class SmoothCorner extends LitElement {
           stroke-width="${this.borderWidth}"
           transform="translate(${this.borderWidth / 2} ${this.borderWidth / 2})"
         >`
-      )}`;
+      )}
+      <div class="smooth-corner-content">
+        <slot></slot>
+      </div>`;
   }
-
-  static override styles = css`
-    :host {
-      position: relative;
-    }
-    .smooth-corner-bg,
-    .smooth-corner-border {
-      position: absolute;
-      top: 0;
-      left: 0;
-      pointer-events: none;
-    }
-    .smooth-corner-border {
-      z-index: 2;
-    }
-    .smooth-corner-content {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      height: 100%;
-    }
-  `;
 }
 
 declare global {

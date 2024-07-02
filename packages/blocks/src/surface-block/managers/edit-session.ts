@@ -4,9 +4,9 @@ import { isPlainObject, recursive } from 'merge';
 import { z } from 'zod';
 
 import {
-  DEFAULT_NOTE_COLOR,
-  NOTE_SHADOWS,
-  NoteColorsSchema,
+  DEFAULT_NOTE_BACKGROUND_COLOR,
+  DEFAULT_NOTE_SHADOW,
+  NoteBackgroundColorsSchema,
   NoteShadowsSchema,
 } from '../../_common/edgeless/note/consts.js';
 import { LineWidth, NoteDisplayMode } from '../../_common/types.js';
@@ -26,6 +26,7 @@ import {
   TextVerticalAlign,
 } from '../consts.js';
 import {
+  ConnectorMode,
   DEFAULT_FRONT_END_POINT_STYLE,
   DEFAULT_REAR_END_POINT_STYLE,
 } from '../element-model/connector.js';
@@ -100,7 +101,7 @@ const LastPropsSchema = z.object({
     fontSize: z.number(),
   }),
   'affine:note': z.object({
-    background: NoteColorsSchema,
+    background: NoteBackgroundColorsSchema,
     displayMode: NoteDisplayModeSchema.optional(),
     edgeless: z.object({
       style: z.object({
@@ -169,6 +170,7 @@ export class EditPropsStore {
       strokeStyle: StrokeStyle.Solid,
       strokeWidth: LineWidth.Two,
       rough: false,
+      mode: ConnectorMode.Curve,
     },
     brush: {
       color: GET_DEFAULT_LINE_COLOR(),
@@ -194,14 +196,14 @@ export class EditPropsStore {
       fontSize: 24,
     },
     'affine:note': {
-      background: DEFAULT_NOTE_COLOR,
+      background: DEFAULT_NOTE_BACKGROUND_COLOR,
       displayMode: NoteDisplayMode.DocAndEdgeless,
       edgeless: {
         style: {
-          borderRadius: 8,
+          borderRadius: 0,
           borderSize: 4,
-          borderStyle: StrokeStyle.Solid,
-          shadowType: NOTE_SHADOWS[1],
+          borderStyle: StrokeStyle.None,
+          shadowType: DEFAULT_NOTE_SHADOW,
         },
       },
     },
@@ -228,6 +230,34 @@ export class EditPropsStore {
         this._lastProps = result.data;
       }
     }
+  }
+
+  private _getKey<T extends keyof StorageProps>(key: T) {
+    const id = this._service.doc.id;
+    switch (key) {
+      case 'viewport':
+        return 'blocksuite:' + id + ':edgelessViewport';
+      case 'presentBlackBackground':
+        return 'blocksuite:presentation:blackBackground';
+      case 'presentFillScreen':
+        return 'blocksuite:presentation:fillScreen';
+      case 'presentHideToolbar':
+        return 'blocksuite:presentation:hideToolbar';
+      case 'templateCache':
+        return 'blocksuite:' + id + ':templateTool';
+      case 'remoteColor':
+        return 'blocksuite:remote-color';
+      case 'showBidirectional':
+        return 'blocksuite:' + id + ':showBidirectional';
+      case 'autoHideEmbedHTMLFullScreenToolbar':
+        return 'blocksuite:embedHTML:autoHideFullScreenToolbar';
+      default:
+        return key;
+    }
+  }
+
+  private _getStorage<T extends keyof StorageProps>(key: T) {
+    return isSessionProp(key) ? sessionStorage : localStorage;
   }
 
   getLastProps<T extends keyof LastProps>(type: T) {
@@ -258,30 +288,6 @@ export class EditPropsStore {
     deepAssign(props, lastProps);
   }
 
-  private _getKey<T extends keyof StorageProps>(key: T) {
-    const id = this._service.doc.id;
-    switch (key) {
-      case 'viewport':
-        return 'blocksuite:' + id + ':edgelessViewport';
-      case 'presentBlackBackground':
-        return 'blocksuite:presentation:blackBackground';
-      case 'presentFillScreen':
-        return 'blocksuite:presentation:fillScreen';
-      case 'presentHideToolbar':
-        return 'blocksuite:presentation:hideToolbar';
-      case 'templateCache':
-        return 'blocksuite:' + id + ':templateTool';
-      case 'remoteColor':
-        return 'blocksuite:remote-color';
-      case 'showBidirectional':
-        return 'blocksuite:' + id + ':showBidirectional';
-      case 'autoHideEmbedHTMLFullScreenToolbar':
-        return 'blocksuite:embedHTML:autoHideFullScreenToolbar';
-      default:
-        return key;
-    }
-  }
-
   setItem<T extends keyof StorageProps>(key: T, value: StorageProps[T]) {
     const oldValue = this.getItem(key);
     this._getStorage(key).setItem(this._getKey(key), JSON.stringify(value));
@@ -308,10 +314,6 @@ export class EditPropsStore {
     } catch {
       return null;
     }
-  }
-
-  private _getStorage<T extends keyof StorageProps>(key: T) {
-    return isSessionProp(key) ? sessionStorage : localStorage;
   }
 
   dispose() {

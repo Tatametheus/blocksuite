@@ -42,6 +42,22 @@ test.describe('slash menu should show and hide correctly', () => {
     await enterPlaygroundRoom(page);
   });
 
+  test("slash menu should show when user input '/'", async ({ page }) => {
+    await initEmptyParagraphState(page);
+    const slashMenu = page.locator(`.slash-menu`);
+    await focusRichText(page);
+    await type(page, '/');
+    await expect(slashMenu).toBeVisible();
+  });
+
+  test("slash menu should show when user input '、'", async ({ page }) => {
+    await initEmptyParagraphState(page);
+    const slashMenu = page.locator(`.slash-menu`);
+    await focusRichText(page);
+    await type(page, '、');
+    await expect(slashMenu).toBeVisible();
+  });
+
   test('slash menu should hide after click away', async ({ page }) => {
     const id = await initEmptyParagraphState(page);
     const paragraphId = id.paragraphId;
@@ -170,27 +186,86 @@ test.describe('slash menu should show and hide correctly', () => {
 
     await pressArrowDown(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.nth(1)).toHaveAttribute('hover');
+    await expect(slashItems.nth(1)).toHaveAttribute('hover', 'true');
     await expect(slashItems.nth(1).locator('.text')).toHaveText(['Heading 1']);
     await assertRichTexts(page, ['/']);
 
     await pressArrowUp(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.first()).toHaveAttribute('hover');
+    await expect(slashItems.first()).toHaveAttribute('hover', 'true');
     await expect(slashItems.first().locator('.text')).toHaveText(['Text']);
     await assertRichTexts(page, ['/']);
 
     await pressArrowUp(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.last()).toHaveAttribute('hover');
+    await expect(slashItems.last()).toHaveAttribute('hover', 'true');
     await expect(slashItems.last().locator('.text')).toHaveText(['Delete']);
     await assertRichTexts(page, ['/']);
 
     await pressArrowDown(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.first()).toHaveAttribute('hover');
+    await expect(slashItems.first()).toHaveAttribute('hover', 'true');
     await expect(slashItems.first().locator('.text')).toHaveText(['Text']);
     await assertRichTexts(page, ['/']);
+  });
+
+  test('slash menu hover state', async ({ page }) => {
+    await initEmptyParagraphState(page);
+    const slashMenu = page.locator(`.slash-menu`);
+    await focusRichText(page);
+    await type(page, '/');
+    await expect(slashMenu).toBeVisible();
+
+    const slashItems = slashMenu.locator('icon-button');
+
+    await pressArrowDown(page);
+    await expect(slashItems.nth(1)).toHaveAttribute('hover', 'true');
+
+    await pressArrowUp(page);
+    await expect(slashItems.nth(1)).toHaveAttribute('hover', 'false');
+    await expect(slashItems.nth(0)).toHaveAttribute('hover', 'true');
+
+    await pressArrowDown(page);
+    await pressArrowDown(page);
+    await expect(slashItems.nth(2)).toHaveAttribute('hover', 'true');
+    await expect(slashItems.nth(1)).toHaveAttribute('hover', 'false');
+    await expect(slashItems.nth(0)).toHaveAttribute('hover', 'false');
+
+    await slashItems.nth(0).hover();
+    await expect(slashItems.nth(0)).toHaveAttribute('hover', 'true');
+    await expect(slashItems.nth(2)).toHaveAttribute('hover', 'false');
+    await expect(slashItems.nth(1)).toHaveAttribute('hover', 'false');
+  });
+
+  test('should open tooltip when hover on item', async ({ page }) => {
+    await initEmptyParagraphState(page);
+    await focusRichText(page);
+    await type(page, '/');
+    const slashMenu = page.locator(`.slash-menu`);
+    await expect(slashMenu).toBeVisible();
+
+    const slashItems = slashMenu.locator('icon-button');
+    const tooltip = page.locator('.affine-tooltip');
+
+    await slashItems.nth(0).hover();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip.locator('.tooltip-caption')).toHaveText(['Text']);
+    await page.mouse.move(0, 0);
+    await expect(tooltip).toBeHidden();
+
+    await slashItems.nth(1).hover();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip.locator('.tooltip-caption')).toHaveText([
+      'Heading #1',
+    ]);
+    await page.mouse.move(0, 0);
+    await expect(tooltip).toBeHidden();
+
+    await expect(slashItems.nth(4).locator('.text')).toHaveText([
+      'Other Headings',
+    ]);
+    await slashItems.nth(4).hover();
+    await expect(tooltip).toBeHidden();
   });
 
   test('press tab should move up and down', async ({ page }) => {
@@ -204,25 +279,25 @@ test.describe('slash menu should show and hide correctly', () => {
 
     await pressTab(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.nth(1)).toHaveAttribute('hover');
+    await expect(slashItems.nth(1)).toHaveAttribute('hover', 'true');
     await expect(slashItems.nth(1).locator('.text')).toHaveText(['Heading 1']);
     await assertRichTexts(page, ['/']);
 
     await pressShiftTab(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.first()).toHaveAttribute('hover');
+    await expect(slashItems.first()).toHaveAttribute('hover', 'true');
     await expect(slashItems.first().locator('.text')).toHaveText(['Text']);
     await assertRichTexts(page, ['/']);
 
     await pressShiftTab(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.last()).toHaveAttribute('hover');
+    await expect(slashItems.last()).toHaveAttribute('hover', 'true');
     await expect(slashItems.last().locator('.text')).toHaveText(['Delete']);
     await assertRichTexts(page, ['/']);
 
     await pressTab(page);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.first()).toHaveAttribute('hover');
+    await expect(slashItems.first()).toHaveAttribute('hover', 'true');
     await expect(slashItems.first().locator('.text')).toHaveText(['Text']);
     await assertRichTexts(page, ['/']);
   });
@@ -240,25 +315,25 @@ test.describe('slash menu should show and hide correctly', () => {
 
     await page.keyboard.press(`${SHORT_KEY}+n`);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.nth(1)).toHaveAttribute('hover');
+    await expect(slashItems.nth(1)).toHaveAttribute('hover', 'true');
     await expect(slashItems.nth(1).locator('.text')).toHaveText(['Heading 1']);
     await assertRichTexts(page, ['/']);
 
     await page.keyboard.press(`${SHORT_KEY}+p`);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.first()).toHaveAttribute('hover');
+    await expect(slashItems.first()).toHaveAttribute('hover', 'true');
     await expect(slashItems.first().locator('.text')).toHaveText(['Text']);
     await assertRichTexts(page, ['/']);
 
     await page.keyboard.press(`${SHORT_KEY}+p`);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.last()).toHaveAttribute('hover');
+    await expect(slashItems.last()).toHaveAttribute('hover', 'true');
     await expect(slashItems.last().locator('.text')).toHaveText(['Delete']);
     await assertRichTexts(page, ['/']);
 
     await page.keyboard.press(`${SHORT_KEY}+n`);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.first()).toHaveAttribute('hover');
+    await expect(slashItems.first()).toHaveAttribute('hover', 'true');
     await expect(slashItems.first().locator('.text')).toHaveText(['Text']);
     await assertRichTexts(page, ['/']);
   });
@@ -279,7 +354,7 @@ test.describe('slash menu should show and hide correctly', () => {
     assertExists(rect);
     await page.mouse.move(rect.x + 10, rect.y + 10);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.nth(4)).toHaveAttribute('hover');
+    await expect(slashItems.nth(4)).toHaveAttribute('hover', 'true');
     await expect(slashItems.nth(4).locator('.text')).toHaveText([
       'Other Headings',
     ]);
@@ -289,7 +364,7 @@ test.describe('slash menu should show and hide correctly', () => {
     assertExists(rect);
     await page.mouse.move(rect.x + 10, rect.y + 10);
     await expect(slashMenu).toBeVisible();
-    await expect(slashItems.nth(3)).toHaveAttribute('hover');
+    await expect(slashItems.nth(3)).toHaveAttribute('hover', 'true');
     await expect(slashItems.nth(3).locator('.text')).toHaveText(['Heading 3']);
     await expect(subMenu).toBeHidden();
   });
@@ -317,7 +392,7 @@ test.describe('slash menu should show and hide correctly', () => {
 
     await type(page, '/');
     await pressArrowDown(page, 4);
-    await expect(slashItems.nth(4)).toHaveAttribute('hover');
+    await expect(slashItems.nth(4)).toHaveAttribute('hover', 'true');
     await expect(slashItems.nth(4).locator('.text')).toHaveText([
       'Other Headings',
     ]);
@@ -352,7 +427,7 @@ test.describe('slash menu should show and hide correctly', () => {
     await type(page, '/');
     await expect(slashMenu).toBeVisible();
     await pressArrowDown(page, 4);
-    await expect(slashItems.nth(4)).toHaveAttribute('hover');
+    await expect(slashItems.nth(4)).toHaveAttribute('hover', 'true');
     await expect(slashItems.nth(4).locator('.text')).toHaveText([
       'Other Headings',
     ]);
@@ -469,7 +544,7 @@ test.describe('slash search', () => {
     await expect(slashItems).toHaveCount(2);
     await expect(slashItems.nth(0).locator('.text')).toHaveText(['Code Block']);
     await expect(slashItems.nth(1).locator('.text')).toHaveText(['Copy']);
-    await expect(slashItems.nth(0)).toHaveAttribute('hover');
+    await expect(slashItems.nth(0)).toHaveAttribute('hover', 'true');
 
     await type(page, 'p');
     await expect(slashItems).toHaveCount(1);
@@ -480,7 +555,7 @@ test.describe('slash search', () => {
     await expect(slashItems).toHaveCount(2);
     await expect(slashItems.nth(0).locator('.text')).toHaveText(['Code Block']);
     await expect(slashItems.nth(1).locator('.text')).toHaveText(['Copy']);
-    await expect(slashItems.nth(0)).toHaveAttribute('hover');
+    await expect(slashItems.nth(0)).toHaveAttribute('hover', 'true');
   });
 
   test('slash menu supports fuzzy search', async ({ page }) => {
@@ -881,15 +956,15 @@ test('delete block by slash menu should remove children', async ({ page }) => {
     page,
     `
 <affine:note
-  prop:background="--affine-background-secondary-color"
+  prop:background="--affine-note-background-blue"
   prop:displayMode="both"
   prop:edgeless={
     Object {
       "style": Object {
-        "borderRadius": 8,
+        "borderRadius": 0,
         "borderSize": 4,
-        "borderStyle": "solid",
-        "shadowType": "--affine-note-shadow-box",
+        "borderStyle": "none",
+        "shadowType": "--affine-note-shadow-sticker",
       },
     }
   }

@@ -5,8 +5,10 @@ import {
   isElementOutsideViewport,
   isSelectSingleMindMap,
 } from '../../_common/edgeless/mindmap/index.js';
-import { type EdgelessTool, LassoMode } from '../../_common/types.js';
+import { LassoMode } from '../../_common/types.js';
 import { matchFlavours } from '../../_common/utils/model.js';
+import { EdgelessTextBlockComponent } from '../../edgeless-text/edgeless-text-block.js';
+import { EdgelessTextBlockModel } from '../../edgeless-text/edgeless-text-model.js';
 import { MindmapElementModel } from '../../surface-block/element-model/mindmap.js';
 import { LayoutType } from '../../surface-block/element-model/utils/mindmap/layout.js';
 import type { ShapeElementModel } from '../../surface-block/index.js';
@@ -23,6 +25,7 @@ import { LassoToolController } from './controllers/tools/lasso-tool.js';
 import { ShapeToolController } from './controllers/tools/shape-tool.js';
 import { EdgelessBlockModel } from './edgeless-block-model.js';
 import type { EdgelessRootBlockComponent } from './edgeless-root-block.js';
+import type { EdgelessTool } from './types.js';
 import {
   DEFAULT_NOTE_CHILD_FLAVOUR,
   DEFAULT_NOTE_CHILD_TYPE,
@@ -31,7 +34,10 @@ import {
 import { deleteElements } from './utils/crud.js';
 import { getNextShapeType, updateShapeProps } from './utils/hotkey-utils.js';
 import { isCanvasElement, isNoteBlock } from './utils/query.js';
-import { mountShapeTextEditor } from './utils/text.js';
+import {
+  mountConnectorLabelEditor,
+  mountShapeTextEditor,
+} from './utils/text.js';
 
 export class EdgelessPageKeyboardManager extends PageKeyboardManager {
   constructor(override rootElement: EdgelessRootBlockComponent) {
@@ -49,13 +55,9 @@ export class EdgelessPageKeyboardManager extends PageKeyboardManager {
           });
         },
         c: () => {
-          rootElement.service.editPropsStore.record('connector', {
-            mode: ConnectorMode.Straight,
-          });
-          this._setEdgelessTool(rootElement, {
-            type: 'connector',
-            mode: ConnectorMode.Straight,
-          });
+          const mode = ConnectorMode.Curve;
+          rootElement.service.editPropsStore.record('connector', { mode });
+          this._setEdgelessTool(rootElement, { type: 'connector', mode });
         },
         l: () => {
           if (!rootElement.doc.awarenessStore.getFlag('enable_lasso_tool')) {
@@ -98,37 +100,6 @@ export class EdgelessPageKeyboardManager extends PageKeyboardManager {
             panning: false,
           });
         },
-        m: () => {
-          if (!rootElement.doc.awarenessStore.getFlag('enable_mindmap_entry')) {
-            return;
-          }
-
-          if (this.rootElement.service.locked) return;
-          if (this.rootElement.service.selection.editing) return;
-          const edgelessService = this.rootElement.service;
-          const lastMousePosition = edgelessService.tool.lastMousePos;
-          const [x, y] = edgelessService.viewport.toModelCoord(
-            lastMousePosition.x,
-            lastMousePosition.y
-          );
-          const mindmapId = edgelessService.addElement('mindmap', {}) as string;
-          const mindmap = edgelessService.getElementById(
-            mindmapId
-          ) as MindmapElementModel;
-          const nodeId = mindmap.addNode(null, undefined, undefined, {
-            text: 'Mind Map',
-            xywh: `[${x},${y},150,30]`,
-          });
-
-          requestAnimationFrame(() => {
-            mountShapeTextEditor(
-              this.rootElement.service.getElementById(
-                nodeId
-              )! as ShapeElementModel,
-              this.rootElement
-            );
-          });
-        },
         n: () => {
           this._setEdgelessTool(rootElement, {
             type: 'affine:note',
@@ -145,14 +116,6 @@ export class EdgelessPageKeyboardManager extends PageKeyboardManager {
         e: () => {
           this._setEdgelessTool(rootElement, {
             type: 'eraser',
-          });
-        },
-        s: () => {
-          const attributes =
-            rootElement.service.editPropsStore.getLastProps('shape');
-          this._setEdgelessTool(rootElement, {
-            type: 'shape',
-            shapeType: attributes.shapeType,
           });
         },
         k: () => {
@@ -177,6 +140,13 @@ export class EdgelessPageKeyboardManager extends PageKeyboardManager {
           ) {
             const frame = rootElement.service.frame.createFrameOnSelected();
             if (!frame) return;
+            rootElement.service.telemetryService?.track('CanvasElementAdded', {
+              control: 'shortcut',
+              page: 'whiteboard editor',
+              module: 'toolbar',
+              segment: 'toolbar',
+              type: 'frame',
+            });
             rootElement.surface.fitToViewport(Bound.deserialize(frame.xywh));
           } else if (!this.rootElement.service.selection.editing) {
             this._setEdgelessTool(rootElement, { type: 'frame' });
@@ -195,10 +165,43 @@ export class EdgelessPageKeyboardManager extends PageKeyboardManager {
         },
         '@': () => {
           const std = this.rootElement.std;
-          if (std.selection.getGroup('note').length > 0) {
+          if (
+            std.selection.getGroup('note').length > 0 ||
+            // eslint-disable-next-line unicorn/prefer-array-some
+            std.selection.find('text') ||
+            // eslint-disable-next-line unicorn/prefer-array-some
+            Boolean(std.selection.find('surface')?.editing)
+          ) {
             return;
           }
-          std.command.exec('insertLinkByQuickSearch');
+          const { insertedLinkType } = std.command.exec(
+            'insertLinkByQuickSearch'
+          );
+
+          insertedLinkType
+            ?.then(type => {
+              if (type) {
+                rootElement.service.telemetryService?.track(
+                  'CanvasElementAdded',
+                  {
+                    control: 'shortcut',
+                    page: 'whiteboard editor',
+                    module: 'toolbar',
+                    segment: 'toolbar',
+                    type: type.flavour.split(':')[1],
+                  }
+                );
+                if (type.isNewDoc) {
+                  rootElement.service.telemetryService?.track('DocCreated', {
+                    control: 'shortcut',
+                    page: 'whiteboard editor',
+                    segment: 'whiteboard',
+                    type: type.flavour.split(':')[1],
+                  });
+                }
+              }
+            })
+            .catch(console.error);
         },
         'Shift-s': () => {
           if (this.rootElement.service.locked) return;
@@ -350,6 +353,36 @@ export class EdgelessPageKeyboardManager extends PageKeyboardManager {
           const { service } = rootElement;
           const selection = service.selection;
           const elements = selection.selectedElements;
+          const onlyOne = elements.length === 1;
+
+          if (onlyOne) {
+            const element = elements[0];
+            const id = element.id;
+
+            if (element instanceof ConnectorElementModel) {
+              selection.set({
+                elements: [id],
+                editing: true,
+              });
+              requestAnimationFrame(() => {
+                mountConnectorLabelEditor(element, rootElement);
+              });
+              return;
+            }
+
+            if (element instanceof EdgelessTextBlockModel) {
+              selection.set({
+                elements: [id],
+                editing: true,
+              });
+              const textBlock = rootElement.host.view.getBlock(id);
+              if (textBlock instanceof EdgelessTextBlockComponent) {
+                textBlock.tryFocusEnd();
+              }
+
+              return;
+            }
+          }
 
           if (!isSelectSingleMindMap(elements)) {
             return;
@@ -606,13 +639,13 @@ export class EdgelessPageKeyboardManager extends PageKeyboardManager {
           isElementOutsideViewport(
             edgeless.service.viewport,
             targetNode,
-            [20, 20]
+            [90, 20]
           )
         ) {
           const [dx, dy] = getNearestTranslation(
             edgeless.service.viewport,
             targetNode,
-            [20, 20]
+            [100, 20]
           );
 
           edgeless.service.viewport.smoothTranslate(

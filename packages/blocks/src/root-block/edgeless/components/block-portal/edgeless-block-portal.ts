@@ -8,7 +8,6 @@ import './embed/edgeless-embed.js';
 import './edgeless-text/edgeless-edgeless-text.js';
 import '../rects/edgeless-selected-rect.js';
 import '../rects/edgeless-dragging-area-rect.js';
-import '../../components/auto-connect/edgeless-index-label.js';
 import '../presentation/edgeless-navigator-black-background.js';
 
 import { ShadowlessElement, WithDisposable } from '@blocksuite/block-std';
@@ -24,11 +23,13 @@ import { last } from '../../../../_common/utils/iterable.js';
 import type { FrameBlockModel } from '../../../../frame-block/frame-model.js';
 import type { NoteBlockModel } from '../../../../note-block/index.js';
 import type { GroupElementModel } from '../../../../surface-block/index.js';
+import type { BlockLayer } from '../../../../surface-block/managers/layer-manager.js';
 import type { SurfaceBlockComponent } from '../../../../surface-block/surface-block.js';
 import { EdgelessBlockModel } from '../../edgeless-block-model.js';
 import type { EdgelessRootBlockComponent } from '../../edgeless-root-block.js';
 import { getBackgroundGrid, isNoteBlock } from '../../utils/query.js';
 import type { EdgelessSelectedRect } from '../rects/edgeless-selected-rect.js';
+import type { EdgelessPortalBase } from './edgeless-portal-base.js';
 
 export type AutoConnectElement =
   | NoteBlockModel
@@ -49,6 +50,10 @@ const portalMap = new Map<BlockSuite.EdgelessModelKeyType | RegExp, string>([
 export class EdgelessBlockPortalContainer extends WithDisposable(
   ShadowlessElement
 ) {
+  get isDragging() {
+    return this.selectedRect.dragging;
+  }
+
   static override styles = css`
     .affine-block-children-container.edgeless {
       user-select: none;
@@ -64,40 +69,22 @@ export class EdgelessBlockPortalContainer extends WithDisposable(
     }
   `;
 
-  static renderPortal(
-    block: BlockSuite.EdgelessBlockModelType,
-    zIndex: number,
-    surface: SurfaceBlockComponent,
-    edgeless: EdgelessRootBlockComponent
-  ) {
-    const target = Array.from(portalMap.entries()).find(([key]) => {
-      if (typeof key === 'string') {
-        return key === block.flavour;
-      }
-      return key.test(block.flavour);
-    });
-    assertExists(
-      target,
-      `Unknown block flavour for edgeless portal: ${block.flavour}`
-    );
+  @state()
+  private accessor _isResizing = false;
 
-    const [_, tagName] = target;
+  @state()
+  private accessor _enableNoteSlicer = false;
 
-    const tag = literal`${unsafeStatic(tagName)}`;
-    return html`<${tag}
-          slot="blocks"
-          data-index=${block.index}
-          .index=${zIndex}
-          .model=${block}
-          .surface=${surface}
-          .edgeless=${edgeless}
-          style=${styleMap({
-            zIndex,
-            display: 'block',
-            position: 'relative',
-          })}
-        ></${tag}>`;
-  }
+  @state()
+  private accessor _slicerAnchorNote: NoteBlockModel | null = null;
+
+  private _visibleElements = new Set<EdgelessBlockModel>();
+
+  private _updateOnVisibleBlocksChange = requestThrottledConnectFrame(() => {
+    if (this._updateVisibleBlocks()) {
+      this.requestUpdate();
+    }
+  }, this);
 
   @property({ attribute: false })
   accessor edgeless!: EdgelessRootBlockComponent;
@@ -114,24 +101,9 @@ export class EdgelessBlockPortalContainer extends WithDisposable(
   @query('.canvas-slot')
   accessor canvasSlot!: HTMLDivElement;
 
-  @state()
-  private accessor _isResizing = false;
-
-  @state()
-  private accessor _enableNoteSlicer = false;
-
-  @state()
-  private accessor _slicerAnchorNote: NoteBlockModel | null = null;
-
-  private _visibleElements = new Set<EdgelessBlockModel>();
-
   concurrentRendering: number = 2;
 
   renderingSet = new Set<string>();
-
-  get isDragging() {
-    return this.selectedRect.dragging;
-  }
 
   refreshLayerViewport = requestThrottledConnectFrame(() => {
     if (!this.edgeless || !this.edgeless.surface) return;
@@ -189,21 +161,6 @@ export class EdgelessBlockPortalContainer extends WithDisposable(
     return false;
   }
 
-  private _updateOnVisibleBlocksChange = requestThrottledConnectFrame(() => {
-    if (this._updateVisibleBlocks()) {
-      this.requestUpdate();
-    }
-  }, this);
-
-  setSlotContent(children: HTMLElement[]) {
-    if (this.canvasSlot.children.length !== children.length) {
-      children.forEach(child => {
-        child.style.setProperty('transform', 'var(--canvas-transform-offset)');
-      });
-      this.canvasSlot.replaceChildren(...children);
-    }
-  }
-
   private _updateNoteSlicer() {
     const { edgeless } = this;
     const { selectedElements } = edgeless.service.selection;
@@ -227,6 +184,21 @@ export class EdgelessBlockPortalContainer extends WithDisposable(
     }
 
     return `translate(${translateX}px, ${translateY}px) scale(${zoom})`;
+  }
+
+  setSlotContent(children: HTMLElement[]) {
+    if (this.canvasSlot.children.length !== children.length) {
+      children.forEach(child => {
+        child.style.setProperty('transform', 'var(--canvas-transform-offset)');
+      });
+      this.canvasSlot.replaceChildren(...children);
+    }
+  }
+
+  getPortalElement(id: string) {
+    return this.querySelector(
+      `[data-portal-block-id="${id}"]`
+    ) as EdgelessPortalBase<BlockSuite.EdgelessBlockModelType> | null;
   }
 
   override connectedCallback(): void {
@@ -316,6 +288,18 @@ export class EdgelessBlockPortalContainer extends WithDisposable(
     const lastLayer = last(layers);
     const frameStartIndex =
       lastLayer?.zIndex ?? 1 + (lastLayer?.elements.length ?? 0) + 1;
+    const blocks = layers.reduce(
+      (pre, layer) => {
+        if (layer.type === 'block') {
+          pre = pre.concat(
+            layer.elements.map((block, index) => [block, layer, index])
+          );
+        }
+
+        return pre;
+      },
+      [] as [EdgelessBlockModel, BlockLayer, number][]
+    );
 
     return html`
       <div class="affine-block-children-container edgeless">
@@ -325,49 +309,38 @@ export class EdgelessBlockPortalContainer extends WithDisposable(
           data-translate="true"
         >
           <div class="canvas-slot"></div>
-          ${layers
-            .filter(layer => layer.type === 'block')
-            .map(layer => {
-              const elements =
-                layer.elements as BlockSuite.EdgelessBlockModelType[];
+          ${repeat(
+            blocks,
+            block => block[0].id,
+            ([block, layer, index]) => {
+              const target = Array.from(portalMap.entries()).find(([key]) => {
+                if (typeof key === 'string') {
+                  return key === block.flavour;
+                }
+                return key.test(block.flavour);
+              });
+              assertExists(
+                target,
+                `Unknown block flavour for edgeless portal: ${block.flavour}`
+              );
 
-              return repeat(
-                elements,
-                block => block.id,
-                (block, index) => {
-                  const target = Array.from(portalMap.entries()).find(
-                    ([key]) => {
-                      if (typeof key === 'string') {
-                        return key === block.flavour;
-                      }
-                      return key.test(block.flavour);
-                    }
-                  );
-                  assertExists(
-                    target,
-                    `Unknown block flavour for edgeless portal: ${block.flavour}`
-                  );
+              const [_, tagName] = target;
+              const tag = unsafeStatic(tagName);
 
-                  const [_, tagName] = target;
-
-                  const tag = unsafeStatic(tagName);
-                  const zIndex = layer.zIndex + index;
-
-                  return html`<${tag}
+              return html`<${tag}
                       data-index=${block.index}
                       data-portal-block-id=${block.id}
-                      .index=${zIndex}
+                      .index=${layer.zIndex + index}
                       .model=${block}
                       .surface=${surface}
                       .edgeless=${edgeless}
                       .updatingSet=${this.renderingSet}
                       .concurrentUpdatingCount=${this.concurrentRendering}
                       .portalContainer=${this}
-                      style=${`z-index: ${zIndex};${_visibleElements.has(block) ? 'display:block' : ''}`}
+                      style=${`z-index: ${layer.zIndex + index};${_visibleElements.has(block) ? 'display:block' : ''}`}
                     ></${tag}>`;
-                }
-              );
-            })}
+            }
+          )}
           <edgeless-frames-container
             .edgeless=${edgeless}
             .frames=${service.layer.frames}
@@ -393,17 +366,45 @@ export class EdgelessBlockPortalContainer extends WithDisposable(
         .autoCompleteOff=${this._enableNoteSlicer}
       ></edgeless-selected-rect>
 
-      ${!readonly
-        ? html`<edgeless-index-label
-            .surface=${surface}
-            .edgeless=${edgeless}
-          ></edgeless-index-label>`
-        : nothing}
-
       <edgeless-navigator-black-background
         .edgeless=${edgeless}
       ></edgeless-navigator-black-background>
     `;
+  }
+
+  static renderPortal(
+    block: BlockSuite.EdgelessBlockModelType,
+    zIndex: number,
+    surface: SurfaceBlockComponent,
+    edgeless: EdgelessRootBlockComponent
+  ) {
+    const target = Array.from(portalMap.entries()).find(([key]) => {
+      if (typeof key === 'string') {
+        return key === block.flavour;
+      }
+      return key.test(block.flavour);
+    });
+    assertExists(
+      target,
+      `Unknown block flavour for edgeless portal: ${block.flavour}`
+    );
+
+    const [_, tagName] = target;
+
+    const tag = literal`${unsafeStatic(tagName)}`;
+    return html`<${tag}
+          slot="blocks"
+          data-index=${block.index}
+          .index=${zIndex}
+          .model=${block}
+          .surface=${surface}
+          .edgeless=${edgeless}
+          style=${styleMap({
+            zIndex,
+            display: 'block',
+            position: 'relative',
+          })}
+        ></${tag}>`;
   }
 }
 

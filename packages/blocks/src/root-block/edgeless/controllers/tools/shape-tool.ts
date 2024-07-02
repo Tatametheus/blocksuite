@@ -1,18 +1,18 @@
 import type { PointerEventState } from '@blocksuite/block-std';
 import { assertExists, noop } from '@blocksuite/global/utils';
 
-import type {
-  EdgelessTool,
-  ShapeTool,
-} from '../../../../_common/utils/index.js';
 import { hasClassNameInList } from '../../../../_common/utils/index.js';
-import type { ShapeElementModel } from '../../../../surface-block/index.js';
+import type {
+  ShapeElementModel,
+  ShapeType,
+} from '../../../../surface-block/index.js';
 import {
   Bound,
   CanvasElementType,
   type IVec,
 } from '../../../../surface-block/index.js';
 import type { SelectionArea } from '../../services/tools-manager.js';
+import type { EdgelessTool } from '../../types.js';
 import {
   EXCLUDING_MOUSE_OUT_CLASS_LIST,
   SHAPE_OVERLAY_HEIGHT,
@@ -20,14 +20,14 @@ import {
   SHAPE_OVERLAY_WIDTH,
 } from '../../utils/consts.js';
 import { ShapeOverlay } from '../../utils/tool-overlay.js';
-import { EdgelessToolController } from './index.js';
+import { EdgelessToolController } from './edgeless-tool.js';
+
+export type ShapeTool = {
+  type: 'shape';
+  shapeType: ShapeType | 'roundedRect';
+};
 
 export class ShapeToolController extends EdgelessToolController<ShapeTool> {
-  readonly tool = {
-    type: 'shape',
-    shapeType: 'rect',
-  } as ShapeTool;
-
   private _draggingElement: ShapeElementModel | null = null;
 
   private _draggingElementId: string | null = null;
@@ -35,12 +35,19 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
   // shape overlay
   private _shapeOverlay: ShapeOverlay | null = null;
 
-  protected override _draggingArea: SelectionArea | null = null;
-
   // For moving selection with space with mouse
   private _moveWithSpaceStartPos: IVec = [0, 0];
 
   private _moveWithSpaceShapePosTemp: SelectionArea | null = null;
+
+  private _disableOverlay = false;
+
+  protected override _draggingArea: SelectionArea | null = null;
+
+  readonly tool = {
+    type: 'shape',
+    shapeType: 'rect',
+  } as ShapeTool;
 
   private _addNewShape(
     e: PointerEventState,
@@ -64,11 +71,97 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
       radius: attributes.radius,
     });
 
+    this._service.telemetryService?.track('CanvasElementAdded', {
+      control: 'canvas:draw',
+      page: 'whiteboard editor',
+      module: 'toolbar',
+      segment: 'toolbar',
+      type: CanvasElementType.SHAPE,
+      other: {
+        shapeType,
+      },
+    });
+
     return id;
+  }
+
+  private _move() {
+    const {
+      _draggingArea,
+      _moveWithSpaceStartPos,
+      _moveWithSpaceShapePosTemp,
+    } = this;
+    assertExists(_draggingArea);
+    assertExists(_moveWithSpaceShapePosTemp);
+
+    const { x: moveCurX, y: moveCurY } = _draggingArea.end;
+
+    const dx = moveCurX - _moveWithSpaceStartPos[0];
+    const dy = moveCurY - _moveWithSpaceStartPos[1];
+
+    const { start, end } = _moveWithSpaceShapePosTemp;
+    _draggingArea.start.x = start.x + dx;
+    _draggingArea.start.y = start.y + dy;
+    _draggingArea.end.x = end.x + dx;
+    _draggingArea.end.y = end.y + dy;
+  }
+
+  private _resize(shift = false) {
+    const { _draggingElementId: id, _draggingArea } = this;
+    assertExists(id);
+    assertExists(_draggingArea);
+
+    const { viewport } = this._service;
+    const { zoom } = viewport;
+    const {
+      start: { x: startX, y: startY },
+      end,
+    } = _draggingArea;
+    let { x: endX, y: endY } = end;
+
+    if (shift) {
+      const w = Math.abs(endX - startX);
+      const h = Math.abs(endY - startY);
+      const m = Math.max(w, h);
+      endX = startX + (endX > startX ? m : -m);
+      endY = startY + (endY > startY ? m : -m);
+    }
+
+    const [x, y] = viewport.toModelCoord(
+      Math.min(startX, endX),
+      Math.min(startY, endY)
+    );
+    const w = Math.abs(startX - endX) / zoom;
+    const h = Math.abs(startY - endY) / zoom;
+
+    const bound = new Bound(x, y, w, h);
+
+    this._service.updateElement(id, {
+      xywh: bound.serialize(),
+    });
+  }
+
+  private _updateOverlayPosition(x: number, y: number) {
+    if (!this._shapeOverlay) return;
+    this._shapeOverlay.x = x;
+    this._shapeOverlay.y = y;
+    this._edgeless.surface.refresh();
+  }
+
+  private _hideOverlay() {
+    if (!this._shapeOverlay) return;
+
+    this._shapeOverlay.globalAlpha = 0;
+    this._edgeless.surface.refresh();
+  }
+
+  setDisableOverlay(disable: boolean) {
+    this._disableOverlay = disable;
   }
 
   onContainerClick(e: PointerEventState): void {
     this.clearOverlay();
+    if (this._disableOverlay) return;
 
     this._doc.captureSync();
 
@@ -100,6 +193,7 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
   }
 
   onContainerDragStart(e: PointerEventState) {
+    if (this._disableOverlay) return;
     this.clearOverlay();
 
     this._doc.captureSync();
@@ -118,6 +212,7 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
   }
 
   onContainerDragMove(e: PointerEventState) {
+    if (this._disableOverlay) return;
     assertExists(this._draggingElementId);
     assertExists(this._draggingArea);
 
@@ -131,6 +226,7 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
   }
 
   onContainerDragEnd() {
+    if (this._disableOverlay) return;
     if (this._draggingElement) {
       const draggingElement = this._draggingElement;
 
@@ -197,82 +293,12 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
     }
   }
 
-  private _move() {
-    const {
-      _draggingArea,
-      _moveWithSpaceStartPos,
-      _moveWithSpaceShapePosTemp,
-    } = this;
-    assertExists(_draggingArea);
-    assertExists(_moveWithSpaceShapePosTemp);
-
-    const { x: moveCurX, y: moveCurY } = _draggingArea.end;
-
-    const dx = moveCurX - _moveWithSpaceStartPos[0];
-    const dy = moveCurY - _moveWithSpaceStartPos[1];
-
-    const { start, end } = _moveWithSpaceShapePosTemp;
-    _draggingArea.start.x = start.x + dx;
-    _draggingArea.start.y = start.y + dy;
-    _draggingArea.end.x = end.x + dx;
-    _draggingArea.end.y = end.y + dy;
-  }
-
-  private _resize(shift = false) {
-    const { _draggingElementId: id, _draggingArea } = this;
-    assertExists(id);
-    assertExists(_draggingArea);
-
-    const { viewport } = this._service;
-    const { zoom } = viewport;
-    const {
-      start: { x: startX, y: startY },
-      end,
-    } = _draggingArea;
-    let { x: endX, y: endY } = end;
-
-    if (shift) {
-      const w = Math.abs(endX - startX);
-      const h = Math.abs(endY - startY);
-      const m = Math.max(w, h);
-      endX = startX + (endX > startX ? m : -m);
-      endY = startY + (endY > startY ? m : -m);
-    }
-
-    const [x, y] = viewport.toModelCoord(
-      Math.min(startX, endX),
-      Math.min(startY, endY)
-    );
-    const w = Math.abs(startX - endX) / zoom;
-    const h = Math.abs(startY - endY) / zoom;
-
-    const bound = new Bound(x, y, w, h);
-
-    this._service.updateElement(id, {
-      xywh: bound.serialize(),
-    });
-  }
-
-  private _updateOverlayPosition(x: number, y: number) {
-    if (!this._shapeOverlay) return;
-    this._shapeOverlay.x = x;
-    this._shapeOverlay.y = y;
-    this._edgeless.surface.refresh();
-  }
-
   clearOverlay() {
     if (!this._shapeOverlay) return;
 
     this._shapeOverlay.dispose();
     this._edgeless.surface.renderer.removeOverlay(this._shapeOverlay);
     this._shapeOverlay = null;
-    this._edgeless.surface.refresh();
-  }
-
-  private _hideOverlay() {
-    if (!this._shapeOverlay) return;
-
-    this._shapeOverlay.globalAlpha = 0;
     this._edgeless.surface.refresh();
   }
 
@@ -308,6 +334,7 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
 
   createOverlay() {
     this.clearOverlay();
+    if (this._disableOverlay) return;
     const options = SHAPE_OVERLAY_OPTIONS;
     const attributes =
       this._edgeless.service.editPropsStore.getLastProps('shape');
@@ -335,5 +362,13 @@ export class ShapeToolController extends EdgelessToolController<ShapeTool> {
       strokeColor: options.stroke,
     });
     this._edgeless.surface.renderer.addOverlay(this._shapeOverlay);
+  }
+}
+
+declare global {
+  namespace BlockSuite {
+    interface EdgelessToolMap {
+      shape: ShapeToolController;
+    }
   }
 }

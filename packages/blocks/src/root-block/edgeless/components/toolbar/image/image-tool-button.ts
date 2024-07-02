@@ -2,19 +2,19 @@ import { html, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import { EdgelessImageIcon } from '../../../../../_common/icons/edgeless.js';
-import type { EdgelessTool } from '../../../../../_common/types.js';
 import { getImageFilesFromLocal } from '../../../../../_common/utils/filesys.js';
+import type { EdgelessTool } from '../../../types.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 
 @customElement('edgeless-image-tool-button')
 export class EdgelessImageToolButton extends EdgelessToolbarToolMixin(
   LitElement
 ) {
-  // There is no 'image' type, just use 'default' here, since image has no active state
-  override type: EdgelessTool['type'] = 'default';
-
   @state()
   private accessor _imageLoading = false;
+
+  // There is no 'image' type, just use 'default' here, since image has no active state
+  override type: EdgelessTool['type'] = 'default';
 
   private async _addImages() {
     this._imageLoading = true;

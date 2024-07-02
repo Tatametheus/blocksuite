@@ -87,149 +87,6 @@ import type { EmbedOptions } from '../../root-service.js';
 
 @customElement('edgeless-change-embed-card-button')
 export class EdgelessChangeEmbedCardButton extends WithDisposable(LitElement) {
-  static override styles = css`
-    .change-embed-card-button {
-      width: 24px;
-      height: 24px;
-      border-radius: 4px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .change-embed-card-button svg {
-      width: 20px;
-      height: 20px;
-    }
-
-    .change-embed-card-button.url {
-      display: flex;
-      width: 180px;
-      padding: var(--1, 0px);
-      align-items: flex-start;
-      gap: 10px;
-      border-radius: var(--1, 0px);
-      opacity: var(--add, 1);
-      margin-right: 6px;
-      user-select: none;
-      cursor: pointer;
-    }
-
-    .change-embed-card-button.url > span {
-      display: -webkit-box;
-      -webkit-line-clamp: 1;
-      -webkit-box-orient: vertical;
-
-      color: var(--affine-link-color);
-      font-feature-settings:
-        'clig' off,
-        'liga' off;
-      font-family: ${unsafeCSS(baseTheme.fontSansFamily)};
-      font-size: 15px;
-      font-style: normal;
-      font-weight: 400;
-      line-height: 24px;
-      text-overflow: ellipsis;
-      overflow: hidden;
-      opacity: var(--add, 1);
-    }
-
-    .change-embed-card-button.doc-info {
-      display: flex;
-      align-items: center;
-      width: max-content;
-      max-width: 180px;
-      padding: var(--1, 0px);
-
-      gap: 4px;
-      border-radius: var(--1, 0px);
-      opacity: var(--add, 1);
-      user-select: none;
-      cursor: pointer;
-    }
-
-    .change-embed-card-button.doc-info > svg {
-      width: 20px;
-      height: 20px;
-      flex-shrink: 0;
-    }
-
-    .change-embed-card-button.doc-info > span {
-      display: -webkit-box;
-      -webkit-line-clamp: 1;
-      -webkit-box-orient: vertical;
-
-      color: var(--affine-text-primary-color);
-      font-feature-settings:
-        'clig' off,
-        'liga' off;
-      word-break: break-all;
-      font-family: ${unsafeCSS(baseTheme.fontSansFamily)};
-      font-size: 14px;
-      font-style: normal;
-      font-weight: 400;
-      line-height: 22px;
-      text-overflow: ellipsis;
-      overflow: hidden;
-      opacity: var(--add, 1);
-    }
-
-    .change-embed-card-view-style {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .change-embed-card-button-view-selector {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 2px;
-      border-radius: 6px;
-      background: var(--affine-hover-color);
-    }
-    .change-embed-card-button-view-selector .change-embed-card-button {
-      width: 24px;
-      height: 24px;
-    }
-    .change-embed-card-button-view-selector > icon-button {
-      padding: 0px;
-    }
-    .change-embed-card-button-view-selector .current-view {
-      background: var(--affine-background-overlay-panel-color);
-      border-radius: 6px;
-    }
-
-    .embed-scale-button {
-      display: flex;
-      align-items: center;
-      border-radius: 4px;
-      background-color: var(--affine-hover-color);
-      gap: 2px;
-      line-height: 24px;
-    }
-  `;
-
-  @property({ attribute: false })
-  accessor model!:
-    | BookmarkBlockModel
-    | EmbedGithubModel
-    | EmbedYoutubeModel
-    | EmbedFigmaModel
-    | EmbedLinkedDocModel
-    | EmbedSyncedDocModel
-    | EmbedHtmlModel
-    | EmbedLoomModel;
-
-  @property({ attribute: false })
-  accessor edgeless!: EdgelessRootBlockComponent;
-
-  @property({ attribute: false })
-  accessor quickConnectButton!: TemplateResult<1>;
-
-  @state()
-  private accessor _embedScale = 1;
-
   private get _doc() {
     return this.model.doc;
   }
@@ -237,8 +94,6 @@ export class EdgelessChangeEmbedCardButton extends WithDisposable(LitElement) {
   private get std() {
     return this.edgeless.std;
   }
-
-  private _embedOptions: EmbedOptions | null = null;
 
   private get _rootService() {
     return this.std.spec.getService('affine:page');
@@ -383,6 +238,168 @@ export class EdgelessChangeEmbedCardButton extends WithDisposable(LitElement) {
       | EmbedSyncedDocBlockComponent;
     return block.docTitle;
   }
+
+  private get _embedViewButtonDisabled() {
+    if (this._doc.readonly) {
+      return true;
+    }
+    return (
+      isEmbedLinkedDocBlock(this.model) &&
+      (!!this._blockElement?.closest('affine-embed-synced-doc-block') ||
+        this.model.pageId === this._doc.id)
+    );
+  }
+
+  get _openButtonDisabled() {
+    return (
+      isEmbedLinkedDocBlock(this.model) && this.model.pageId === this._doc.id
+    );
+  }
+
+  static override styles = css`
+    .change-embed-card-button {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .change-embed-card-button svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .change-embed-card-button.url {
+      display: flex;
+      width: 180px;
+      padding: var(--1, 0px);
+      align-items: flex-start;
+      gap: 10px;
+      border-radius: var(--1, 0px);
+      opacity: var(--add, 1);
+      margin-right: 6px;
+      user-select: none;
+      cursor: pointer;
+    }
+
+    .change-embed-card-button.url > span {
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+
+      color: var(--affine-link-color);
+      font-feature-settings:
+        'clig' off,
+        'liga' off;
+      font-family: ${unsafeCSS(baseTheme.fontSansFamily)};
+      font-size: 15px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 24px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      opacity: var(--add, 1);
+    }
+
+    .change-embed-card-button.doc-info {
+      display: flex;
+      align-items: center;
+      width: max-content;
+      max-width: 180px;
+      padding: var(--1, 0px);
+
+      gap: 4px;
+      border-radius: var(--1, 0px);
+      opacity: var(--add, 1);
+      user-select: none;
+      cursor: pointer;
+    }
+
+    .change-embed-card-button.doc-info > svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .change-embed-card-button.doc-info > span {
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+
+      color: var(--affine-text-primary-color);
+      font-feature-settings:
+        'clig' off,
+        'liga' off;
+      word-break: break-all;
+      font-family: ${unsafeCSS(baseTheme.fontSansFamily)};
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 22px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      opacity: var(--add, 1);
+    }
+
+    .change-embed-card-view-style {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .change-embed-card-button-view-selector {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 2px;
+      border-radius: 6px;
+      background: var(--affine-hover-color);
+    }
+    .change-embed-card-button-view-selector .change-embed-card-button {
+      width: 24px;
+      height: 24px;
+    }
+    .change-embed-card-button-view-selector > icon-button {
+      padding: 0px;
+    }
+    .change-embed-card-button-view-selector .current-view {
+      background: var(--affine-background-overlay-panel-color);
+      border-radius: 6px;
+    }
+
+    .embed-scale-button {
+      display: flex;
+      align-items: center;
+      border-radius: 4px;
+      background-color: var(--affine-hover-color);
+      gap: 2px;
+      line-height: 24px;
+    }
+  `;
+
+  @state()
+  private accessor _embedScale = 1;
+
+  private _embedOptions: EmbedOptions | null = null;
+
+  @property({ attribute: false })
+  accessor model!:
+    | BookmarkBlockModel
+    | EmbedGithubModel
+    | EmbedYoutubeModel
+    | EmbedFigmaModel
+    | EmbedLinkedDocModel
+    | EmbedSyncedDocModel
+    | EmbedHtmlModel
+    | EmbedLoomModel;
+
+  @property({ attribute: false })
+  accessor edgeless!: EdgelessRootBlockComponent;
+
+  @property({ attribute: false })
+  accessor quickConnectButton!: TemplateResult<1>;
 
   private _open = () => {
     this._blockElement?.open();
@@ -601,9 +618,10 @@ export class EdgelessChangeEmbedCardButton extends WithDisposable(LitElement) {
         ? html`
             <edgeless-tool-icon-button
               arai-label="Open"
-              .tooltip=${'Open'}
+              .tooltip=${'Open this doc'}
               class="change-embed-card-button open"
               @click=${this._open}
+              .disabled=${this._openButtonDisabled}
             >
               ${OpenIcon}
             </edgeless-tool-icon-button>
@@ -614,7 +632,7 @@ export class EdgelessChangeEmbedCardButton extends WithDisposable(LitElement) {
         ? html`
             <edgeless-tool-icon-button
               arai-label="Center peek"
-              .tooltip=${'Center peek'}
+              .tooltip=${'Open in center peek'}
               class="change-embed-card-button center-peek"
               @click=${this._peek}
             >
@@ -663,7 +681,7 @@ export class EdgelessChangeEmbedCardButton extends WithDisposable(LitElement) {
                   })}
                   arai-label="Embed view"
                   .tooltip=${'Embed view'}
-                  ?disabled=${this._doc.readonly}
+                  .disabled=${this._embedViewButtonDisabled}
                   .hover=${false}
                   @click=${this._convertToEmbedView}
                 >

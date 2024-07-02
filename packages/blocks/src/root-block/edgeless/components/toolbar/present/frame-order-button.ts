@@ -23,12 +23,6 @@ export class EdgelessFrameOrderButton extends WithDisposable(LitElement) {
     }
   `;
 
-  @property({ attribute: false })
-  accessor edgeless!: EdgelessRootBlockComponent;
-
-  @property({ attribute: false })
-  accessor frames!: FrameBlockModel[];
-
   @query('.edgeless-frame-order-button')
   private accessor _edgelessFrameOrderButton!: HTMLElement;
 
@@ -40,18 +34,13 @@ export class EdgelessFrameOrderButton extends WithDisposable(LitElement) {
   > | null = null;
 
   @property({ attribute: false })
-  accessor popperShow = false;
+  accessor edgeless!: EdgelessRootBlockComponent;
 
   @property({ attribute: false })
-  accessor setPopperShow: (show: boolean) => void = () => {};
+  accessor frames!: FrameBlockModel[];
 
-  override firstUpdated() {
-    this._edgelessFrameOrderPopper = createButtonPopper(
-      this._edgelessFrameOrderButton,
-      this._edgelessFrameOrderMenu,
-      ({ display }) => this.setPopperShow(display === 'show')
-    );
-  }
+  @property({ attribute: false })
+  accessor popperShow = false;
 
   protected override render() {
     const { readonly } = this.edgeless.doc;
@@ -68,6 +57,7 @@ export class EdgelessFrameOrderButton extends WithDisposable(LitElement) {
           if (readonly) return;
           this._edgelessFrameOrderPopper?.toggle();
         }}
+        .iconContainerPadding=${0}
       >
         ${FrameOrderAdjustmentIcon}
       </edgeless-tool-icon-button>
@@ -77,5 +67,17 @@ export class EdgelessFrameOrderButton extends WithDisposable(LitElement) {
       >
       </edgeless-frame-order-menu>
     `;
+  }
+
+  @property({ attribute: false })
+  accessor setPopperShow: (show: boolean) => void = () => {};
+
+  override firstUpdated() {
+    this._edgelessFrameOrderPopper = createButtonPopper(
+      this._edgelessFrameOrderButton,
+      this._edgelessFrameOrderMenu,
+      ({ display }) => this.setPopperShow(display === 'show'),
+      22
+    );
   }
 }

@@ -5,10 +5,16 @@ import { cssVar } from '@toeverything/theme';
 import type { LitElement } from 'lit';
 import { property, state } from 'lit/decorators.js';
 
-import type { EdgelessTool } from '../../../../../_common/types.js';
 import type { EdgelessRootBlockComponent } from '../../../edgeless-root-block.js';
+import type { EdgelessTool } from '../../../types.js';
 import { createPopper, type MenuPopper } from '../common/create-popper.js';
-import { edgelessToolbarThemeContext } from '../context.js';
+import {
+  edgelessToolbarContext,
+  type EdgelessToolbarSlots,
+  edgelessToolbarSlotsContext,
+  edgelessToolbarThemeContext,
+} from '../context.js';
+import type { EdgelessToolbar } from '../edgeless-toolbar.js';
 
 export declare abstract class EdgelessToolbarToolClass extends DisposableClass {
   edgeless: EdgelessRootBlockComponent;
@@ -23,11 +29,15 @@ export declare abstract class EdgelessToolbarToolClass extends DisposableClass {
 
   theme: 'light' | 'dark';
 
+  toolbarSlots: EdgelessToolbarSlots;
+
+  accessor toolbar: EdgelessToolbar;
+
   enableActiveBackground?: boolean;
 
   abstract type: EdgelessTool['type'] | EdgelessTool['type'][];
 
-  setEdgelessTool: (tool: EdgelessTool) => void;
+  setEdgelessTool: EdgelessRootBlockComponent['tools']['setEdgelessTool'];
 
   createPopper: typeof createPopper;
 
@@ -41,20 +51,6 @@ export const EdgelessToolbarToolMixin = <T extends Constructor<LitElement>>(
   SuperClass: T
 ) => {
   abstract class DerivedClass extends WithDisposable(SuperClass) {
-    @property({ attribute: false })
-    accessor edgeless!: EdgelessRootBlockComponent;
-
-    @property({ attribute: false })
-    accessor toolbarContainer: HTMLElement | null = null;
-
-    @state()
-    accessor edgelessTool!: EdgelessTool;
-
-    @consume({ context: edgelessToolbarThemeContext, subscribe: true })
-    accessor theme!: 'light' | 'dark';
-
-    enableActiveBackground = false;
-
     get setEdgelessTool() {
       return this.edgeless.tools.setEdgelessTool;
     }
@@ -67,6 +63,26 @@ export const EdgelessToolbarToolMixin = <T extends Constructor<LitElement>>(
         : activeType === type;
     }
 
+    @property({ attribute: false })
+    accessor edgeless!: EdgelessRootBlockComponent;
+
+    @property({ attribute: false })
+    accessor toolbarContainer: HTMLElement | null = null;
+
+    @state()
+    accessor edgelessTool!: EdgelessTool;
+
+    @consume({ context: edgelessToolbarThemeContext, subscribe: true })
+    accessor theme!: 'light' | 'dark';
+
+    @consume({ context: edgelessToolbarSlotsContext })
+    accessor toolbarSlots!: EdgelessToolbarSlots;
+
+    @consume({ context: edgelessToolbarContext })
+    accessor toolbar!: EdgelessToolbar;
+
+    enableActiveBackground = false;
+
     abstract type: EdgelessTool['type'] | EdgelessTool['type'][];
 
     @state()
@@ -76,19 +92,32 @@ export const EdgelessToolbarToolMixin = <T extends Constructor<LitElement>>(
       this.edgelessTool = newTool ?? this.edgeless.edgelessTool;
     }
 
+    private _applyActiveStyle() {
+      if (!this.enableActiveBackground) return;
+      this.style.background = this.active
+        ? cssVar('hoverColor')
+        : 'transparent';
+    }
+
     // TODO: move to toolbar-tool-with-menu.mixin
     createPopper(...args: Parameters<typeof createPopper>) {
+      if (this.toolbar.activePopper) {
+        this.toolbar.activePopper.dispose();
+        this.toolbar.activePopper = null;
+      }
       this.popper = createPopper(args[0], args[1], {
         ...args[2],
         onDispose: () => {
           args[2]?.onDispose?.();
           this.popper = null;
         },
-      });
+      }) as MenuPopper<HTMLElement>;
+      this.toolbar.activePopper = this.popper;
       return this.popper;
     }
 
     tryDisposePopper() {
+      if (!this.active) return false;
       if (this.popper) {
         this.popper.dispose();
         this.popper = null;
@@ -104,12 +133,8 @@ export const EdgelessToolbarToolMixin = <T extends Constructor<LitElement>>(
       this._applyActiveStyle();
       this._disposables.add(
         this.edgeless.slots.edgelessToolUpdated.on(newTool => {
-          this._updateActiveEdgelessTool();
+          this._updateActiveEdgelessTool(newTool);
           this._applyActiveStyle();
-          if (newTool.type !== this.type) {
-            this.popper?.dispose();
-            this.popper = null;
-          }
         })
       );
     }
@@ -117,13 +142,6 @@ export const EdgelessToolbarToolMixin = <T extends Constructor<LitElement>>(
     override disconnectedCallback() {
       super.disconnectedCallback();
       this.popper?.dispose();
-    }
-
-    private _applyActiveStyle() {
-      if (!this.enableActiveBackground) return;
-      this.style.background = this.active
-        ? cssVar('hoverColor')
-        : 'transparent';
     }
   }
 

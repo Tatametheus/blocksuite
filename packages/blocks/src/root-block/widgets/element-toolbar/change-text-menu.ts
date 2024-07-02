@@ -2,6 +2,7 @@ import '../../edgeless/components/buttons/menu-button.js';
 import '../../edgeless/components/panel/font-family-panel.js';
 import '../../edgeless/components/panel/size-panel.js';
 import '../../edgeless/components/panel/font-weight-and-style-panel.js';
+import '../../edgeless/components/panel/align-panel.js';
 
 import { WithDisposable } from '@blocksuite/block-std';
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
@@ -97,7 +98,13 @@ function extractField<K extends keyof TextStyleProps>(
   element: BlockSuite.EdgelessTextModelType,
   field: K
 ) {
-  if (element instanceof EdgelessTextBlockModel) return null;
+  //TODO: It's not a very good handling method.
+  //      The edgeless-change-text-menu should be refactored into a widget to allow external registration of its own logic.
+  if (element instanceof EdgelessTextBlockModel) {
+    return field === 'fontSize'
+      ? null
+      : (element[field as keyof EdgelessTextBlockModel] as TextStyleProps[K]);
+  }
   return (
     element instanceof ConnectorElementModel
       ? element.labelStyle[field]

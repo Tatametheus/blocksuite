@@ -11,25 +11,36 @@ import type { EdgelessRootBlockComponent } from '../../../edgeless-root-block.js
 @customElement('edgeless-frame-order-menu')
 export class EdgelessFrameOrderMenu extends WithDisposable(LitElement) {
   static override styles = css`
+    :host {
+      position: relative;
+    }
     .edgeless-frame-order-items-container {
       max-height: 281px;
       border-radius: 8px;
-      padding: 8px 0px 8px 8px;
+      padding: 8px;
       background: var(--affine-background-overlay-panel-color);
       box-shadow: var(--affine-menu-shadow);
       overflow: auto;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 4px;
+    }
+    .edgeless-frame-order-items-container.embed {
+      padding: 0;
+      background: unset;
+      box-shadow: unset;
+      border-radius: 0;
     }
 
     .item {
+      box-sizing: border-box;
       width: 256px;
       border-radius: 4px;
       padding: 4px;
       display: flex;
+      gap: 4px;
       align-items: center;
-      cursor: pointer;
+      cursor: grab;
     }
 
     .draggable:hover {
@@ -48,27 +59,6 @@ export class EdgelessFrameOrderMenu extends WithDisposable(LitElement) {
       opacity: 0.2;
       background: var(--affine-placeholder-color);
       margin-right: 2px;
-    }
-
-    .index {
-      width: 20px;
-      min-width: 20px;
-      height: 24px;
-      text-align: center;
-      font-weight: 400;
-      font-size: 15px;
-      line-height: 24px;
-      color: var(--affine-text-secondary-color);
-      margin-right: 4px;
-    }
-
-    .image {
-      width: 70px;
-      min-width: 70px;
-      height: 45px;
-      border-radius: 4px;
-      box-shadow: 0px 1px 6px 0px rgba(0, 0, 0, 0.16);
-      margin-right: 8px;
     }
 
     .title {
@@ -109,10 +99,7 @@ export class EdgelessFrameOrderMenu extends WithDisposable(LitElement) {
   private accessor _curIndex = -1;
 
   @property({ attribute: false })
-  accessor edgeless!: EdgelessRootBlockComponent;
-
-  @property({ attribute: false })
-  accessor frames!: FrameBlockModel[];
+  accessor embed = false;
 
   @query('.edgeless-frame-order-items-container')
   private accessor _container!: HTMLDivElement;
@@ -123,9 +110,11 @@ export class EdgelessFrameOrderMenu extends WithDisposable(LitElement) {
   @query('.clone')
   private accessor _clone!: HTMLDivElement;
 
-  override firstUpdated() {
-    this._bindEvent();
-  }
+  @property({ attribute: false })
+  accessor edgeless!: EdgelessRootBlockComponent;
+
+  @property({ attribute: false })
+  accessor frames!: FrameBlockModel[];
 
   private _bindEvent() {
     const { _disposables } = this;
@@ -172,12 +161,15 @@ export class EdgelessFrameOrderMenu extends WithDisposable(LitElement) {
           let top = 0;
           if (relativeY < rect.height / 2) {
             newIndex = 0;
-            top = 4;
+            top = this.embed ? -2 : 4;
           } else {
             newIndex = Math.ceil(
               (relativeY - rect.height / 2) / (rect.height + 10)
             );
-            top = 8 + newIndex * rect.height + (newIndex - 0.5) * 10;
+            top =
+              (this.embed ? -2 : 7.5) +
+              newIndex * rect.height +
+              (newIndex - 0.5) * 4;
           }
 
           indicatorLine.style.top = top - this._container.scrollTop + 'px';
@@ -214,12 +206,18 @@ export class EdgelessFrameOrderMenu extends WithDisposable(LitElement) {
     });
   }
 
+  override firstUpdated() {
+    this._bindEvent();
+  }
+
   override render() {
     const frame = this.frames[this._curIndex];
 
     return html`
       <div
-        class="edgeless-frame-order-items-container"
+        class="edgeless-frame-order-items-container ${this.embed
+          ? 'embed'
+          : ''}"
         @click=${(e: MouseEvent) => e.stopPropagation()}
       >
         ${repeat(
@@ -228,7 +226,6 @@ export class EdgelessFrameOrderMenu extends WithDisposable(LitElement) {
           (frame, index) => html`
             <div class="item draggable" id=${frame.id} index=${index}>
               <div class="drag-indicator"></div>
-              <div class="index">${index + 1}</div>
               <div class="title">${frame.title.toString()}</div>
             </div>
           `

@@ -8,22 +8,9 @@ import { databaseViewAddView } from './utils.js';
 import { databaseBlockViewMap, databaseBlockViews } from './views/index.js';
 
 export class DatabaseBlockViewSource implements ViewSource {
-  constructor(private model: DatabaseBlockModel) {}
-
   get currentViewId(): string {
     return this.currentId ?? this.model.views[0].id;
   }
-
-  private viewMap = new Map<string, SingleViewSource>();
-
-  private currentId?: string;
-
-  selectView(id: string): void {
-    this.currentId = id;
-    this.updateSlot.emit();
-  }
-
-  updateSlot = new Slot();
 
   get views(): SingleViewSource[] {
     return this.model.views.map(v => this.viewGet(v.id));
@@ -35,6 +22,31 @@ export class DatabaseBlockViewSource implements ViewSource {
 
   get readonly(): boolean {
     return this.model.doc.readonly;
+  }
+
+  get allViewMeta(): ViewMeta[] {
+    return databaseBlockViews;
+  }
+
+  private viewMap = new Map<string, SingleViewSource>();
+
+  private currentId?: string;
+
+  updateSlot = new Slot<{
+    viewId?: string;
+  }>();
+
+  constructor(private model: DatabaseBlockModel) {}
+
+  checkViewDataUpdate(): void {
+    this.model.views.forEach(v => {
+      this.updateSlot.emit({ viewId: v.id });
+    });
+  }
+
+  selectView(id: string): void {
+    this.currentId = id;
+    this.updateSlot.emit({});
   }
 
   viewAdd(viewType: DataViewTypes): string {
@@ -59,8 +71,15 @@ export class DatabaseBlockViewSource implements ViewSource {
       }
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const self = this;
-      const slot = new Slot();
-      this.updateSlot.pipe(slot);
+      const slot = new Slot<{ viewId: string }>();
+      this.updateSlot
+        .flatMap(data => {
+          if (data.viewId === id) {
+            return { viewId: id };
+          }
+          return [];
+        })
+        .pipe(slot);
       result = {
         duplicate(): void {
           self.duplicate(id);
@@ -107,10 +126,6 @@ export class DatabaseBlockViewSource implements ViewSource {
 
   moveTo(id: string, position: InsertToPosition): void {
     this.model.moveViewTo(id, position);
-  }
-
-  get allViewMeta(): ViewMeta[] {
-    return databaseBlockViews;
   }
 
   getViewMeta(type: string): ViewMeta {

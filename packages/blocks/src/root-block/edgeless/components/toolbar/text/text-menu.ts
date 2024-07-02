@@ -5,14 +5,12 @@ import '../common/slide-menu.js';
 import { css, html, LitElement, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { EdgelessTool } from '../../../../../_common/types.js';
+import type { EdgelessTool } from '../../../types.js';
 import type { ColorEvent } from '../../panel/color-panel.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 
 @customElement('edgeless-text-menu')
 export class EdgelessTextMenu extends EdgelessToolbarToolMixin(LitElement) {
-  override type: EdgelessTool['type'] = 'text';
-
   static override styles = css`
     :host {
       display: flex;
@@ -20,6 +18,8 @@ export class EdgelessTextMenu extends EdgelessToolbarToolMixin(LitElement) {
       z-index: -1;
     }
   `;
+
+  override type: EdgelessTool['type'] = 'text';
 
   @property({ attribute: false })
   accessor color!: string;

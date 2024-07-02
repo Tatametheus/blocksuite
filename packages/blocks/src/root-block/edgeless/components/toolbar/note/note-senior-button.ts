@@ -8,7 +8,7 @@ import {
   LinkIcon,
   TextIcon,
 } from '../../../../../_common/icons/text.js';
-import type { NoteTool } from '../../../../../_common/types.js';
+import type { NoteTool } from '../../../controllers/tools/note-tool.js';
 import { DEFAULT_NOTE_BACKGROUND_COLOR } from '../../auto-complete/utils.js';
 import { getTooltipWithShortcut } from '../../utils.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
@@ -18,10 +18,6 @@ import { toShapeNotToAdapt } from './icon.js';
 export class EdgelessNoteSeniorButton extends EdgelessToolbarToolMixin(
   LitElement
 ) {
-  override type = 'affine:note' as const;
-
-  override enableActiveBackground = true;
-
   static override styles = css`
     :host,
     .edgeless-note-button {
@@ -129,6 +125,13 @@ export class EdgelessNoteSeniorButton extends EdgelessToolbarToolMixin(
 
   private _states = ['childFlavour', 'childType', 'tip'] as const;
 
+  @state()
+  private accessor _noteBg: string = DEFAULT_NOTE_BACKGROUND_COLOR;
+
+  override type = 'affine:note' as const;
+
+  override enableActiveBackground = true;
+
   // TODO: better to extract these states outside of component?
   @state()
   accessor childFlavour: NoteTool['childFlavour'] = 'affine:paragraph';
@@ -138,9 +141,6 @@ export class EdgelessNoteSeniorButton extends EdgelessToolbarToolMixin(
 
   @state()
   accessor tip = 'Note';
-
-  @state()
-  private accessor _noteBg: string = DEFAULT_NOTE_BACKGROUND_COLOR;
 
   private _toggleNoteMenu() {
     if (this.tryDisposePopper()) return;

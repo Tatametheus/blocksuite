@@ -4,9 +4,11 @@ import type { IPoint } from '../../../../_common/types.js';
 import {
   Bound,
   getQuadBoundsWithRotation,
+  type PointLocation,
   rotatePoints,
 } from '../../../../surface-block/index.js';
 import { NOTE_MIN_WIDTH } from '../../utils/consts.js';
+import type { SelectableProps } from '../../utils/query.js';
 import { HandleDirection, type ResizeMode } from './resize-handles.js';
 
 // 15deg
@@ -20,6 +22,8 @@ type ResizeMoveHandler = (
     string,
     {
       bound: Bound;
+      path?: PointLocation[];
+      matrix?: DOMMatrix;
     }
   >,
   direction: HandleDirection
@@ -28,6 +32,30 @@ type ResizeMoveHandler = (
 type RotateMoveHandler = (point: IPoint, rotate: number) => void;
 
 export class HandleResizeManager {
+  get dragDirection() {
+    return this._dragDirection;
+  }
+
+  get dragging() {
+    return this._dragging;
+  }
+
+  get rotation() {
+    return this._rotation;
+  }
+
+  get currentRect() {
+    return this._currentRect;
+  }
+
+  get originalRect() {
+    return this._originalRect;
+  }
+
+  get bounds() {
+    return this._bounds;
+  }
+
   private _onDragStart: DragStartHandler;
 
   private _onResizeMove: ResizeMoveHandler;
@@ -98,78 +126,6 @@ export class HandleResizeManager {
     this._onResizeMove = onResizeMove;
     this._onRotateMove = onRotateMove;
     this._onDragEnd = onDragEnd;
-  }
-
-  get dragDirection() {
-    return this._dragDirection;
-  }
-
-  get dragging() {
-    return this._dragging;
-  }
-
-  get rotation() {
-    return this._rotation;
-  }
-
-  get currentRect() {
-    return this._currentRect;
-  }
-
-  get originalRect() {
-    return this._originalRect;
-  }
-
-  get bounds() {
-    return this._bounds;
-  }
-
-  updateState(
-    resizeMode: ResizeMode,
-    rotate: number,
-    zoom: number,
-    position?: { x: number; y: number },
-    originalRect?: DOMRect,
-    proportion = false
-  ) {
-    this._resizeMode = resizeMode;
-    this._rotate = rotate;
-    this._zoom = zoom;
-    this._proportion = proportion;
-
-    if (position) {
-      this._currentRect.x = position.x;
-      this._currentRect.y = position.y;
-      this._originalRect.x = this._currentRect.x;
-      this._originalRect.y = this._currentRect.y;
-    }
-
-    if (originalRect) {
-      this._originalRect = originalRect;
-      this._aspectRatio = originalRect.width / originalRect.height;
-      this._currentRect = DOMRect.fromRect(originalRect);
-    }
-  }
-
-  updateRectPosition(delta: { x: number; y: number }) {
-    this._currentRect.x += delta.x;
-    this._currentRect.y += delta.y;
-    this._originalRect.x = this._currentRect.x;
-    this._originalRect.y = this._currentRect.y;
-
-    return this._originalRect;
-  }
-
-  updateBounds(
-    bounds: Map<
-      string,
-      {
-        bound: Bound;
-        rotate: number;
-      }
-    >
-  ) {
-    this._bounds = bounds;
   }
 
   private _onResize(proportion: boolean) {
@@ -463,10 +419,12 @@ export class HandleResizeManager {
       string,
       {
         bound: Bound;
+        path?: PointLocation[];
+        matrix?: DOMMatrix;
       }
     >();
 
-    let process: (value: { bound: Bound; rotate: number }, key: string) => void;
+    let process: (value: SelectableProps, key: string) => void;
 
     if (isCorner || isAll || isEdgeAndCorner) {
       if (this._bounds.size === 1) {
@@ -487,7 +445,7 @@ export class HandleResizeManager {
           .translateSelf(-fp.x, -fp.y);
 
         // TODO: on same rotate
-        process = ({ bound: { x, y, w, h } }, id) => {
+        process = ({ bound: { x, y, w, h }, path }, id) => {
           const cx = x + w / 2;
           const cy = y + h / 2;
           const center = new DOMPoint(cx, cy).matrixTransform(m2);
@@ -501,6 +459,8 @@ export class HandleResizeManager {
               newWidth,
               newHeight
             ),
+            matrix: m2,
+            path,
           });
         };
       }
@@ -514,7 +474,7 @@ export class HandleResizeManager {
         fixedPoint.y,
         0
       );
-      process = ({ bound: { x, y, w, h }, rotate = 0 }, id) => {
+      process = ({ bound: { x, y, w, h }, rotate = 0, path }, id) => {
         const cx = x + w / 2;
         const cy = y + h / 2;
 
@@ -556,6 +516,8 @@ export class HandleResizeManager {
             newWidth,
             newHeight
           ),
+          matrix: m2,
+          path,
         });
       };
     }
@@ -612,6 +574,46 @@ export class HandleResizeManager {
 
     this._dragPos.start = { x, y };
     this._rotate += delta;
+  }
+
+  updateState(
+    resizeMode: ResizeMode,
+    rotate: number,
+    zoom: number,
+    position?: { x: number; y: number },
+    originalRect?: DOMRect,
+    proportion = false
+  ) {
+    this._resizeMode = resizeMode;
+    this._rotate = rotate;
+    this._zoom = zoom;
+    this._proportion = proportion;
+
+    if (position) {
+      this._currentRect.x = position.x;
+      this._currentRect.y = position.y;
+      this._originalRect.x = this._currentRect.x;
+      this._originalRect.y = this._currentRect.y;
+    }
+
+    if (originalRect) {
+      this._originalRect = originalRect;
+      this._aspectRatio = originalRect.width / originalRect.height;
+      this._currentRect = DOMRect.fromRect(originalRect);
+    }
+  }
+
+  updateRectPosition(delta: { x: number; y: number }) {
+    this._currentRect.x += delta.x;
+    this._currentRect.y += delta.y;
+    this._originalRect.x = this._currentRect.x;
+    this._originalRect.y = this._currentRect.y;
+
+    return this._originalRect;
+  }
+
+  updateBounds(bounds: Map<string, SelectableProps>) {
+    this._bounds = bounds;
   }
 
   onPointerDown = (

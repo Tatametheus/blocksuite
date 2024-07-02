@@ -6,14 +6,12 @@ import {
   HandIcon,
   SelectIcon,
 } from '../../../../../_common/icons/index.js';
-import type { EdgelessTool } from '../../../../../_common/types.js';
+import type { EdgelessTool } from '../../../types.js';
 import { getTooltipWithShortcut } from '../../utils.js';
 import { QuickToolMixin } from '../mixins/quick-tool.mixin.js';
 
 @customElement('edgeless-default-tool-button')
 export class EdgelessDefaultToolButton extends QuickToolMixin(LitElement) {
-  override type: EdgelessTool['type'][] = ['default', 'pan'];
-
   static override styles = css`
     .current-icon {
       transition: 100ms;
@@ -35,22 +33,10 @@ export class EdgelessDefaultToolButton extends QuickToolMixin(LitElement) {
     }
   `;
 
+  override type: EdgelessTool['type'][] = ['default', 'pan'];
+
   @query('.current-icon')
   accessor currentIcon!: HTMLInputElement;
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    if (!localStorage.defaultTool) {
-      localStorage.defaultTool = 'default';
-    }
-    this.disposables.add(
-      this.edgeless.slots.edgelessToolUpdated.on(({ type }) => {
-        if (type === 'default' || type === 'pan') {
-          localStorage.defaultTool = type;
-        }
-      })
-    );
-  }
 
   private _fadeOut() {
     this.currentIcon.style.opacity = '0';
@@ -63,6 +49,10 @@ export class EdgelessDefaultToolButton extends QuickToolMixin(LitElement) {
   }
 
   private _changeTool() {
+    if (this.toolbar.activePopper) {
+      // click manually always closes the popper
+      this.toolbar.activePopper.dispose();
+    }
     const type = this.edgelessTool?.type;
     if (type !== 'default' && type !== 'pan') {
       if (localStorage.defaultTool === 'default') {
@@ -82,6 +72,20 @@ export class EdgelessDefaultToolButton extends QuickToolMixin(LitElement) {
       }
       this._fadeIn();
     }, 100);
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    if (!localStorage.defaultTool) {
+      localStorage.defaultTool = 'default';
+    }
+    this.disposables.add(
+      this.edgeless.slots.edgelessToolUpdated.on(({ type }) => {
+        if (type === 'default' || type === 'pan') {
+          localStorage.defaultTool = type;
+        }
+      })
+    );
   }
 
   override render() {

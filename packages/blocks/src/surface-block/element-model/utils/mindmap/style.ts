@@ -59,10 +59,6 @@ export class StyleOne extends MindmapStyleGetter {
     '#7ae2d5',
   ];
 
-  private _getColor(number: number) {
-    return this._colorOrders[number % this._colorOrders.length];
-  }
-
   readonly root = {
     radius: 8,
 
@@ -70,14 +66,14 @@ export class StyleOne extends MindmapStyleGetter {
     strokeColor: '#84CFFF',
 
     fontFamily: FontFamily.Poppins,
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: FontWeight.SemiBold,
     color: '--affine-black',
 
     filled: true,
     fillColor: '--affine-white',
 
-    padding: [18, 22] as [number, number],
+    padding: [11, 22] as [number, number],
 
     shadow: {
       offsetX: 0,
@@ -86,6 +82,10 @@ export class StyleOne extends MindmapStyleGetter {
       color: 'rgba(0, 0, 0, 0.14)',
     },
   };
+
+  private _getColor(number: number) {
+    return this._colorOrders[number % this._colorOrders.length];
+  }
 
   getNodeStyle(
     _: MindmapNode,
@@ -108,14 +108,14 @@ export class StyleOne extends MindmapStyleGetter {
         strokeColor: color,
 
         fontFamily: FontFamily.Poppins,
-        fontSize: 14,
+        fontSize: 16,
         fontWeight: FontWeight.Medium,
         color: '--affine-black',
 
         filled: true,
         fillColor: '--affine-white',
 
-        padding: [12, 22] as [number, number],
+        padding: [6, 22] as [number, number],
 
         shadow: {
           offsetX: 0,
@@ -136,12 +136,6 @@ export class StyleTwo extends MindmapStyleGetter {
     '--affine-palette-shape-yellow',
   ];
 
-  private _getColor(number: number) {
-    return number >= this._colorOrders.length
-      ? last(this._colorOrders)!
-      : this._colorOrders[number];
-  }
-
   readonly root = {
     radius: 3,
 
@@ -156,7 +150,7 @@ export class StyleTwo extends MindmapStyleGetter {
     filled: true,
     fillColor: '--affine-palette-shape-orange',
 
-    padding: [14, 22] as [number, number],
+    padding: [11, 22] as [number, number],
 
     shadow: {
       blur: 0,
@@ -165,6 +159,12 @@ export class StyleTwo extends MindmapStyleGetter {
       color: '--affine-black',
     },
   };
+
+  private _getColor(number: number) {
+    return number >= this._colorOrders.length
+      ? last(this._colorOrders)!
+      : this._colorOrders[number];
+  }
 
   getNodeStyle(
     _: MindmapNode,
@@ -194,7 +194,7 @@ export class StyleTwo extends MindmapStyleGetter {
         filled: true,
         fillColor: color,
 
-        padding: [9, 22] as [number, number],
+        padding: [6, 22] as [number, number],
 
         shadow: {
           blur: 0,
@@ -209,6 +209,12 @@ export class StyleTwo extends MindmapStyleGetter {
 export const styleTwo = new StyleTwo();
 
 export class StyleThree extends MindmapStyleGetter {
+  private _strokeColor = [
+    '--affine-palette-line-yellow',
+    '--affine-palette-line-green',
+    '--affine-palette-line-teal',
+  ];
+
   readonly root = {
     radius: 10,
 
@@ -223,7 +229,7 @@ export class StyleThree extends MindmapStyleGetter {
     filled: true,
     fillColor: '--affine-palette-shape-yellow',
 
-    padding: [16, 22] as [number, number],
+    padding: [10, 22] as [number, number],
 
     shadow: {
       blur: 12,
@@ -232,12 +238,6 @@ export class StyleThree extends MindmapStyleGetter {
       color: 'rgba(66, 65, 73, 0.18)',
     },
   };
-
-  private _strokeColor = [
-    '--affine-palette-line-yellow',
-    '--affine-palette-line-green',
-    '--affine-palette-line-teal',
-  ];
 
   private _getColor(number: number) {
     return this._strokeColor[number % this._strokeColor.length];
@@ -264,7 +264,7 @@ export class StyleThree extends MindmapStyleGetter {
         filled: true,
         fillColor: '--affine-palette-shape-white',
 
-        padding: [12, 22] as [number, number],
+        padding: [6, 22] as [number, number],
 
         shadow: {
           blur: 12,
@@ -286,6 +286,15 @@ export class StyleThree extends MindmapStyleGetter {
 export const styleThree = new StyleThree();
 
 export class StyleFour extends MindmapStyleGetter {
+  private _colors = [
+    '--affine-palette-shape-purple',
+    '--affine-palette-shape-magenta',
+    '--affine-palette-shape-orange',
+    '--affine-palette-shape-yellow',
+    '--affine-palette-shape-green',
+    '--affine-palette-shape-blue',
+  ];
+
   readonly root = {
     radius: 0,
 
@@ -300,17 +309,8 @@ export class StyleFour extends MindmapStyleGetter {
     filled: true,
     fillColor: 'transparent',
 
-    padding: [8, 10] as [number, number],
+    padding: [0, 10] as [number, number],
   };
-
-  private _colors = [
-    '--affine-palette-shape-purple',
-    '--affine-palette-shape-magenta',
-    '--affine-palette-shape-orange',
-    '--affine-palette-shape-yellow',
-    '--affine-palette-shape-green',
-    '--affine-palette-shape-blue',
-  ];
 
   private _getColor(order: number) {
     return this._colors[order % this._colors.length];
@@ -334,7 +334,7 @@ export class StyleFour extends MindmapStyleGetter {
         ...this.root,
 
         fontSize: 18,
-        padding: [8, 10] as [number, number],
+        padding: [1.5, 10] as [number, number],
       },
     };
   }

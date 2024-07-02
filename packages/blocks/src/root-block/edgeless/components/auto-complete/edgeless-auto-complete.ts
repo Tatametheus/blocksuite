@@ -76,6 +76,15 @@ class AutoCompleteOverlay extends Overlay {
 
 @customElement('edgeless-auto-complete')
 export class EdgelessAutoComplete extends WithDisposable(LitElement) {
+  private get _surface() {
+    return this.edgeless.surface;
+  }
+
+  get canShowAutoComplete() {
+    const { current } = this;
+    return isShape(current) || isNoteBlock(current);
+  }
+
   static override styles = css`
     .edgeless-auto-complete-container {
       position: absolute;
@@ -154,15 +163,6 @@ export class EdgelessAutoComplete extends WithDisposable(LitElement) {
   @state()
   private accessor _isHover = true;
 
-  @property({ attribute: false })
-  accessor edgeless!: EdgelessRootBlockComponent;
-
-  @property({ attribute: false })
-  accessor selectedRect!: SelectedRect;
-
-  @property({ attribute: false })
-  accessor current!: ShapeElementModel | NoteBlockModel;
-
   @state()
   private accessor _isMoving = false;
 
@@ -172,54 +172,14 @@ export class EdgelessAutoComplete extends WithDisposable(LitElement) {
 
   private _pathGenerator!: ConnectorPathGenerator;
 
-  private get _surface() {
-    return this.edgeless.surface;
-  }
+  @property({ attribute: false })
+  accessor edgeless!: EdgelessRootBlockComponent;
 
-  get canShowAutoComplete() {
-    const { current } = this;
-    return isShape(current) || isNoteBlock(current);
-  }
+  @property({ attribute: false })
+  accessor selectedRect!: SelectedRect;
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this._pathGenerator = new ConnectorPathGenerator({
-      getElementById: id => this.edgeless.service.getElementById(id),
-    });
-  }
-
-  override firstUpdated() {
-    const { _disposables, edgeless } = this;
-
-    _disposables.add(
-      this.edgeless.service.selection.slots.updated.on(() => {
-        this._autoCompleteOverlay.linePoints = [];
-        this._autoCompleteOverlay.renderShape = null;
-      })
-    );
-
-    _disposables.add(() => this.removeOverlay());
-
-    _disposables.add(
-      edgeless.host.event.add('pointerMove', () => {
-        const state = edgeless.tools.getHoverState();
-
-        if (!state) {
-          this._isHover = false;
-          return;
-        }
-
-        this._isHover = state.content === this.current ? true : false;
-      })
-    );
-
-    this.edgeless.handleEvent('dragStart', () => {
-      this._isMoving = true;
-    });
-    this.edgeless.handleEvent('dragEnd', () => {
-      this._isMoving = false;
-    });
-  }
+  @property({ attribute: false })
+  accessor current!: ShapeElementModel | NoteBlockModel;
 
   private _createAutoCompletePanel(
     e: PointerEvent,
@@ -486,40 +446,45 @@ export class EdgelessAutoComplete extends WithDisposable(LitElement) {
     });
   }
 
-  removeOverlay() {
-    this._timer && clearTimeout(this._timer);
-    this.edgeless.surface.renderer.removeOverlay(this._autoCompleteOverlay);
-  }
-
   private _getMindmapButtons():
     | [Direction, 'child' | 'sibling', LayoutType.LEFT | LayoutType.RIGHT][]
     | null {
-    const mindmap = this.current.group;
+    const mindmap = this.current.group as MindmapElementModel;
     const mindmapDirection =
       this.current instanceof ShapeElementModel &&
       mindmap instanceof MindmapElementModel
         ? mindmap.getLayoutDir(this.current.id)
         : null;
+    const isRoot = mindmap?.tree.id === this.current.id;
+
+    let result: ReturnType<typeof this._getMindmapButtons> = null;
 
     switch (mindmapDirection) {
       case LayoutType.LEFT:
-        return [
-          [Direction.Left, 'child', LayoutType.LEFT],
-          [Direction.Bottom, 'sibling', LayoutType.LEFT],
-        ];
+        result = [[Direction.Left, 'child', LayoutType.LEFT]];
+
+        if (!isRoot) {
+          result.push([Direction.Bottom, 'sibling', mindmapDirection]);
+        }
+        return result;
       case LayoutType.RIGHT:
-        return [
-          [Direction.Right, 'child', LayoutType.RIGHT],
-          [Direction.Bottom, 'sibling', LayoutType.RIGHT],
-        ];
+        result = [[Direction.Right, 'child', LayoutType.RIGHT]];
+
+        if (!isRoot) {
+          result.push([Direction.Bottom, 'sibling', mindmapDirection]);
+        }
+        return result;
       case LayoutType.BALANCE:
-        return [
+        result = [
           [Direction.Right, 'child', LayoutType.RIGHT],
           [Direction.Left, 'child', LayoutType.LEFT],
         ];
+        return result;
       default:
-        return null;
+        result = null;
     }
+
+    return result;
   }
 
   private _renderMindMapButtons() {
@@ -677,6 +642,51 @@ export class EdgelessAutoComplete extends WithDisposable(LitElement) {
     });
 
     return Arrows;
+  }
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    this._pathGenerator = new ConnectorPathGenerator({
+      getElementById: id => this.edgeless.service.getElementById(id),
+    });
+  }
+
+  override firstUpdated() {
+    const { _disposables, edgeless } = this;
+
+    _disposables.add(
+      this.edgeless.service.selection.slots.updated.on(() => {
+        this._autoCompleteOverlay.linePoints = [];
+        this._autoCompleteOverlay.renderShape = null;
+      })
+    );
+
+    _disposables.add(() => this.removeOverlay());
+
+    _disposables.add(
+      edgeless.host.event.add('pointerMove', () => {
+        const state = edgeless.tools.getHoverState();
+
+        if (!state) {
+          this._isHover = false;
+          return;
+        }
+
+        this._isHover = state.content === this.current ? true : false;
+      })
+    );
+
+    this.edgeless.handleEvent('dragStart', () => {
+      this._isMoving = true;
+    });
+    this.edgeless.handleEvent('dragEnd', () => {
+      this._isMoving = false;
+    });
+  }
+
+  removeOverlay() {
+    this._timer && clearTimeout(this._timer);
+    this.edgeless.surface.renderer.removeOverlay(this._autoCompleteOverlay);
   }
 
   override render() {

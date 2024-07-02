@@ -7,8 +7,6 @@ import { QuickToolMixin } from '../mixins/quick-tool.mixin.js';
 
 @customElement('edgeless-link-tool-button')
 export class EdgelessLinkToolButton extends QuickToolMixin(LitElement) {
-  override type = 'default' as const;
-
   static override styles = css`
     .link-icon,
     .link-icon > svg {
@@ -17,8 +15,50 @@ export class EdgelessLinkToolButton extends QuickToolMixin(LitElement) {
     }
   `;
 
+  override type = 'default' as const;
+
   private _onClick() {
-    this.edgeless.service.std.command.exec('insertLinkByQuickSearch');
+    this.edgeless.service
+      .insertLinkByQuickSearch()
+      .then(type => {
+        if (type) {
+          this.edgeless.service.telemetryService?.track('CanvasElementAdded', {
+            control: 'toolbar:general',
+            page: 'whiteboard editor',
+            module: 'toolbar',
+            segment: 'toolbar',
+            type: type.flavour.split(':')[1],
+          });
+
+          if (type.isNewDoc) {
+            this.edgeless.service.telemetryService?.track('DocCreated', {
+              control: 'toolbar:general',
+              page: 'whiteboard editor',
+              module: 'edgeless toolbar',
+              segment: 'whiteboard',
+              type: type.flavour.split(':')[1],
+            });
+            this.edgeless.service.telemetryService?.track('LinkedDocCreated', {
+              control: 'links',
+              page: 'whiteboard editor',
+              module: 'edgeless toolbar',
+              segment: 'whiteboard',
+              type: type.flavour.split(':')[1],
+              other: 'new doc',
+            });
+          } else {
+            this.edgeless.service.telemetryService?.track('LinkedDocCreated', {
+              control: 'links',
+              page: 'whiteboard editor',
+              module: 'edgeless toolbar',
+              segment: 'whiteboard',
+              type: type.flavour.split(':')[1],
+              other: 'existing doc',
+            });
+          }
+        }
+      })
+      .catch(console.error);
   }
 
   override render() {

@@ -21,6 +21,17 @@ export class RangeBinding {
     return this.manager.host;
   }
 
+  private _prevTextSelection: {
+    selection: TextSelection;
+    path: string[];
+  } | null = null;
+
+  private _compositionStartCallback:
+    | ((event: CompositionEvent) => Promise<void>)
+    | null = null;
+
+  isComposing = false;
+
   constructor(public manager: RangeManager) {
     this.host.disposables.add(
       this.selectionManager.slots.changed.on(this._onStdSelectionChanged)
@@ -51,13 +62,6 @@ export class RangeBinding {
       })
     );
   }
-
-  isComposing = false;
-
-  private _prevTextSelection: {
-    selection: TextSelection;
-    path: string[];
-  } | null = null;
 
   private _onStdSelectionChanged = (selections: BaseSelection[]) => {
     const text =
@@ -215,12 +219,8 @@ export class RangeBinding {
       },
       to: null,
     });
-    this.selectionManager.set([newSelection]);
+    this.selectionManager.setGroup('note', [newSelection]);
   };
-
-  private _compositionStartCallback:
-    | ((event: CompositionEvent) => Promise<void>)
-    | null = null;
 
   private _onCompositionStart = () => {
     const selection = this.selectionManager.find('text');
@@ -298,7 +298,7 @@ export class RangeBinding {
         },
         to: null,
       });
-      this.host.selection.set([selection]);
+      this.host.selection.setGroup('note', [selection]);
       this.rangeManager.syncTextSelectionToRange(selection);
     };
   };

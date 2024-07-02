@@ -6,6 +6,7 @@ import '../fragments/doc-meta-tags/doc-meta-tags.js';
 import { ShadowlessElement, WithDisposable } from '@blocksuite/block-std';
 import type {
   AbstractEditor,
+  DocMode,
   EdgelessRootBlockComponent,
   PageRootBlockComponent,
   PageRootService,
@@ -45,43 +46,6 @@ export class AffineEditorContainer
   extends WithDisposable(ShadowlessElement)
   implements AbstractEditor
 {
-  static override styles = css`
-    .affine-page-viewport {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow-x: hidden;
-      overflow-y: auto;
-      container-name: viewport;
-      container-type: inline-size;
-      background: var(--affine-background-primary-color);
-      font-family: var(--affine-font-family);
-    }
-    .affine-page-viewport * {
-      box-sizing: border-box;
-    }
-
-    @media print {
-      .affine-page-viewport {
-        height: auto;
-      }
-    }
-
-    page-editor {
-      flex-grow: 1;
-    }
-  `;
-
-  @property({ attribute: false })
-  accessor doc!: Doc;
-
-  @property({ attribute: false })
-  accessor mode: 'page' | 'edgeless' = 'page';
-
-  @property({ attribute: false })
-  accessor pageSpecs = PageEditorBlockSpecs;
-
   private get _pageSpecs() {
     return [...this.pageSpecs].map(spec => {
       if (spec.schema.model.flavour === 'affine:page') {
@@ -91,10 +55,9 @@ export class AffineEditorContainer
           setup: (slots, disposable) => {
             setup?.(slots, disposable);
             slots.mounted.once(({ service }) => {
+              const { docModeService } = service as PageRootService;
               disposable.add(
-                (service as PageRootService).slots.editorModeSwitch.on(
-                  this.switchEditor.bind(this)
-                )
+                docModeService.onModeChange(this.switchEditor.bind(this))
               );
             });
           },
@@ -103,9 +66,6 @@ export class AffineEditorContainer
       return spec;
     });
   }
-
-  @property({ attribute: false })
-  accessor edgelessSpecs = EdgelessEditorBlockSpecs;
 
   private get _edgelessSpecs() {
     return [...this.edgelessSpecs].map(spec => {
@@ -116,10 +76,9 @@ export class AffineEditorContainer
           setup: (slots, disposable) => {
             setup?.(slots, disposable);
             slots.mounted.once(({ service }) => {
+              const { docModeService } = service as PageRootService;
               disposable.add(
-                (service as PageRootService).slots.editorModeSwitch.on(
-                  this.switchEditor.bind(this)
-                )
+                docModeService.onModeChange(this.switchEditor.bind(this))
               );
             });
           },
@@ -128,15 +87,6 @@ export class AffineEditorContainer
       return spec;
     });
   }
-
-  @property({ attribute: false })
-  override accessor autofocus = false;
-
-  @query('page-editor')
-  private accessor _pageEditor: PageEditor | null = null;
-
-  @query('edgeless-editor')
-  private accessor _edgelessEditor: EdgelessEditor | null = null;
 
   get editor() {
     const editor =
@@ -154,7 +104,78 @@ export class AffineEditorContainer
     return this.doc.root as BlockModel;
   }
 
-  switchEditor(mode: typeof this.mode) {
+  static override styles = css`
+    .affine-page-viewport {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      container-name: viewport;
+      container-type: inline-size;
+      font-family: var(--affine-font-family);
+    }
+    .affine-page-viewport * {
+      box-sizing: border-box;
+    }
+
+    @media print {
+      .affine-page-viewport {
+        height: auto;
+      }
+    }
+
+    page-editor {
+      flex-grow: 1;
+    }
+  `;
+
+  @query('page-editor')
+  private accessor _pageEditor: PageEditor | null = null;
+
+  @query('edgeless-editor')
+  private accessor _edgelessEditor: EdgelessEditor | null = null;
+
+  /** @deprecated unreliable since pageSpecs can be overridden */
+  @query('affine-page-root')
+  private accessor _pageRoot: PageRootBlockComponent | null = null;
+
+  /** @deprecated unreliable since edgelessSpecs can be overridden */
+  @query('affine-edgeless-root')
+  private accessor _edgelessRoot: EdgelessRootBlockComponent | null = null;
+
+  @property({ attribute: false })
+  accessor doc!: Doc;
+
+  @property({ attribute: false })
+  accessor mode: DocMode = 'page';
+
+  @property({ attribute: false })
+  accessor pageSpecs = PageEditorBlockSpecs;
+
+  @property({ attribute: false })
+  accessor edgelessSpecs = EdgelessEditorBlockSpecs;
+
+  @property({ attribute: false })
+  override accessor autofocus = false;
+
+  /**
+   * @deprecated need to refactor
+   */
+  readonly themeObserver = new ThemeObserver();
+
+  /**
+   * @deprecated need to refactor
+   */
+  slots: AbstractEditor['slots'] = {
+    docLinkClicked: new Slot(),
+    editorModeSwitched: new Slot(),
+    docUpdated: new Slot(),
+    tagClicked: new Slot<{ tagId: string }>(),
+  };
+
+  switchEditor(mode: DocMode) {
     this.mode = mode;
   }
 
@@ -179,29 +200,6 @@ export class AffineEditorContainer
       });
     }
   }
-
-  /** @deprecated unreliable since pageSpecs can be overridden */
-  @query('affine-page-root')
-  private accessor _pageRoot: PageRootBlockComponent | null = null;
-
-  /** @deprecated unreliable since edgelessSpecs can be overridden */
-  @query('affine-edgeless-root')
-  private accessor _edgelessRoot: EdgelessRootBlockComponent | null = null;
-
-  /**
-   * @deprecated need to refactor
-   */
-  readonly themeObserver = new ThemeObserver();
-
-  /**
-   * @deprecated need to refactor
-   */
-  slots: AbstractEditor['slots'] = {
-    docLinkClicked: new Slot(),
-    editorModeSwitched: new Slot(),
-    docUpdated: new Slot(),
-    tagClicked: new Slot<{ tagId: string }>(),
-  };
 
   /**
    * @deprecated need to refactor

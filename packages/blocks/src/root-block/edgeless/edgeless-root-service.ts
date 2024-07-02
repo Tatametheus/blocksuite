@@ -2,7 +2,6 @@ import type { EditorHost } from '@blocksuite/block-std';
 import { assertExists } from '@blocksuite/global/utils';
 import { type BlockModel, Slot } from '@blocksuite/store';
 
-import type { EdgelessTool } from '../../_common/types.js';
 import { last } from '../../_common/utils/iterable.js';
 import { clamp } from '../../_common/utils/math.js';
 import type { FrameBlockModel } from '../../frame-block/index.js';
@@ -27,7 +26,7 @@ import type { ReorderingDirection } from '../../surface-block/managers/layer-man
 import { LayerManager } from '../../surface-block/managers/layer-manager.js';
 import { compare } from '../../surface-block/managers/layer-utils.js';
 import { Bound } from '../../surface-block/utils/bound.js';
-import { RootService } from '../root-service.js';
+import { RootService, type TelemetryEvent } from '../root-service.js';
 import { EdgelessBlockModel } from './edgeless-block-model.js';
 import { EdgelessFrameManager } from './frame-manager.js';
 import { EdgelessSelectionManager } from './services/selection-manager.js';
@@ -40,6 +39,7 @@ import {
 } from './services/template-middlewares.js';
 import type { EdgelessToolConstructor } from './services/tools-manager.js';
 import { EdgelessToolsManager } from './services/tools-manager.js';
+import type { EdgelessTool } from './types.js';
 import { FIT_TO_SCREEN_PADDING } from './utils/consts.js';
 import { getCursorMode } from './utils/query.js';
 import { EdgelessSnapManager } from './utils/snap-manager.js';
@@ -52,95 +52,32 @@ import {
   type ZoomAction,
 } from './utils/viewport.js';
 
+export type ElementCreationSource =
+  | 'shortcut'
+  | 'toolbar:general'
+  | 'toolbar:dnd'
+  | 'canvas:drop'
+  | 'canvas:draw'
+  | 'canvas:dbclick'
+  | 'canvas:paste'
+  | 'context-menu'
+  | 'ai'
+  | 'internal';
+
+declare module '@blocksuite/blocks' {
+  interface ElementCreationEvent extends TelemetryEvent {
+    segment?: 'toolbar';
+    page: 'whiteboard editor';
+    module?: 'toolbar';
+    control?: ElementCreationSource;
+  }
+
+  export interface TelemetryEventMap {
+    CanvasElementAdded: ElementCreationEvent;
+  }
+}
+
 export class EdgelessRootService extends RootService {
-  TemplateJob = TemplateJob;
-
-  slots = {
-    edgelessToolUpdated: new Slot<EdgelessTool>(),
-    pressShiftKeyUpdated: new Slot<boolean>(),
-    cursorUpdated: new Slot<string>(),
-    copyAsPng: new Slot<{
-      blocks: BlockSuite.EdgelessBlockModelType[];
-      shapes: BlockSuite.SurfaceModelType[];
-    }>(),
-    readonlyUpdated: new Slot<boolean>(),
-    draggingAreaUpdated: new Slot(),
-    navigatorSettingUpdated: new Slot<{
-      hideToolbar?: boolean;
-      blackBackground?: boolean;
-      fillScreen?: boolean;
-    }>(),
-    navigatorFrameChanged: new Slot<FrameBlockModel>(),
-    fullScreenToggled: new Slot(),
-
-    elementResizeStart: new Slot(),
-    elementResizeEnd: new Slot(),
-    toggleNoteSlicer: new Slot(),
-
-    docLinkClicked: new Slot<{
-      docId: string;
-      blockId?: string;
-    }>(),
-    tagClicked: new Slot<{ tagId: string }>(),
-    editorModeSwitch: new Slot<'edgeless' | 'page'>(),
-
-    toolbarLocked: new Slot<boolean>(),
-  };
-
-  private _surface!: SurfaceBlockModel;
-
-  private _layer!: LayerManager;
-
-  private _frame!: EdgelessFrameManager;
-
-  private _snap!: EdgelessSnapManager;
-
-  private _selection!: EdgelessSelectionManager;
-
-  private _viewport!: Viewport;
-
-  private _tool!: EdgelessToolsManager;
-
-  override mounted() {
-    super.mounted();
-
-    this._surface = this.doc.getBlockByFlavour(
-      'affine:surface'
-    )[0] as SurfaceBlockModel;
-
-    if (!this._surface) {
-      throw new Error('surface block not found');
-    }
-
-    this._layer = LayerManager.create(this.doc, this._surface);
-    this._frame = new EdgelessFrameManager(this);
-    this._snap = new EdgelessSnapManager(this);
-    this._viewport = new Viewport();
-    this._selection = new EdgelessSelectionManager(this);
-    this._tool = EdgelessToolsManager.create(this, []);
-
-    this._initSlotEffects();
-    this._initReadonlyListener();
-  }
-
-  override unmounted() {
-    super.unmounted();
-
-    this.editPropsStore.setItem('viewport', {
-      centerX: this.viewport.centerX,
-      centerY: this.viewport.centerY,
-      zoom: this.viewport.zoom,
-    });
-
-    this._layer.dispose();
-    this._selection.dispose();
-    this.selectionManager.set([]);
-    this.viewport.dispose();
-    this.tool.dispose();
-    this.disposables.dispose();
-    this._frame.dispose();
-  }
-
   get tool() {
     return this._tool;
   }
@@ -211,6 +148,52 @@ export class EdgelessRootService extends RootService {
     return this.std.host as EditorHost;
   }
 
+  private _surface!: SurfaceBlockModel;
+
+  private _layer!: LayerManager;
+
+  private _frame!: EdgelessFrameManager;
+
+  private _snap!: EdgelessSnapManager;
+
+  private _selection!: EdgelessSelectionManager;
+
+  private _viewport!: Viewport;
+
+  private _tool!: EdgelessToolsManager;
+
+  TemplateJob = TemplateJob;
+
+  slots = {
+    edgelessToolUpdated: new Slot<EdgelessTool>(),
+    pressShiftKeyUpdated: new Slot<boolean>(),
+    cursorUpdated: new Slot<string>(),
+    copyAsPng: new Slot<{
+      blocks: BlockSuite.EdgelessBlockModelType[];
+      shapes: BlockSuite.SurfaceModelType[];
+    }>(),
+    readonlyUpdated: new Slot<boolean>(),
+    draggingAreaUpdated: new Slot(),
+    navigatorSettingUpdated: new Slot<{
+      hideToolbar?: boolean;
+      blackBackground?: boolean;
+      fillScreen?: boolean;
+    }>(),
+    navigatorFrameChanged: new Slot<FrameBlockModel>(),
+    fullScreenToggled: new Slot(),
+
+    elementResizeStart: new Slot(),
+    elementResizeEnd: new Slot(),
+    toggleNoteSlicer: new Slot(),
+
+    docLinkClicked: new Slot<{
+      docId: string;
+      blockId?: string;
+    }>(),
+    tagClicked: new Slot<{ tagId: string }>(),
+    toolbarLocked: new Slot<boolean>(),
+  };
+
   private _initSlotEffects() {
     const { disposables, slots } = this;
 
@@ -241,6 +224,40 @@ export class EdgelessRootService extends RootService {
     );
   }
 
+  override mounted() {
+    super.mounted();
+
+    this._surface = this.doc.getBlockByFlavour(
+      'affine:surface'
+    )[0] as SurfaceBlockModel;
+
+    if (!this._surface) {
+      throw new Error('surface block not found');
+    }
+
+    this._layer = LayerManager.create(this.doc, this._surface);
+    this._frame = new EdgelessFrameManager(this);
+    this._snap = new EdgelessSnapManager(this);
+    this._viewport = new Viewport();
+    this._selection = new EdgelessSelectionManager(this);
+    this._tool = EdgelessToolsManager.create(this, []);
+
+    this._initSlotEffects();
+    this._initReadonlyListener();
+  }
+
+  override unmounted() {
+    super.unmounted();
+
+    this._layer.dispose();
+    this._selection.dispose();
+    this.selectionManager.set([]);
+    this.viewport.dispose();
+    this.tool.dispose();
+    this.disposables.dispose();
+    this._frame.dispose();
+  }
+
   generateIndex(type: string) {
     // @ts-ignore
     return this._layer.generateIndex(type);
@@ -248,7 +265,11 @@ export class EdgelessRootService extends RootService {
 
   addElement<T = Record<string, unknown>>(type: string, props: T) {
     // @ts-ignore
-    props['index'] = this.generateIndex(type);
+    if (props['index'] === undefined) {
+      // @ts-ignore
+      props['index'] = this.generateIndex(type);
+    }
+
     // @ts-ignore
     props['type'] = type;
 

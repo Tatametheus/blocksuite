@@ -15,7 +15,6 @@ import { CodeToolbarItemRenderer, MoreMenuRenderer } from '../utils.js';
 export class AffineCodeToolbar extends WithDisposable(LitElement) {
   static override styles = css`
     :host {
-      z-index: 1;
       position: absolute;
       top: 0;
       right: 0;
@@ -44,6 +43,16 @@ export class AffineCodeToolbar extends WithDisposable(LitElement) {
     }
   `;
 
+  @state()
+  private accessor _moreMenuOpen = false;
+
+  @query('.code-toolbar-button.more-button')
+  private accessor _moreButton!: HTMLElement;
+
+  private _popMenuAbortController: AbortController | null = null;
+
+  private _currentOpenMenu: AbortController | null = null;
+
   @property({ attribute: false })
   accessor blockElement!: CodeBlockComponent;
 
@@ -55,23 +64,6 @@ export class AffineCodeToolbar extends WithDisposable(LitElement) {
 
   @property({ attribute: false })
   accessor onActiveStatusChange: (active: boolean) => void = noop;
-
-  @state()
-  private accessor _moreMenuOpen = false;
-
-  @query('.code-toolbar-button.more-button')
-  private accessor _moreButton!: HTMLElement;
-
-  private _popMenuAbortController: AbortController | null = null;
-
-  private _currentOpenMenu: AbortController | null = null;
-
-  closeCurrentMenu = () => {
-    if (this._currentOpenMenu && !this._currentOpenMenu.signal.aborted) {
-      this._currentOpenMenu.abort();
-      this._currentOpenMenu = null;
-    }
-  };
 
   private _toggleMoreMenu() {
     if (
@@ -105,18 +97,29 @@ export class AffineCodeToolbar extends WithDisposable(LitElement) {
     assertExists(this._moreButton);
     createLitPortal({
       template: moreMenu,
-      container: this._moreButton,
+      // should be greater than block-selection z-index as selection and popover wil share the same stacking context(editor-host)
+      portalStyles: {
+        zIndex: 'var(--affine-z-index-popover)',
+      },
+      container: this.blockElement.host,
       computePosition: {
         referenceElement: this._moreButton,
         placement: 'bottom-start',
         middleware: [flip(), offset(4)],
-        autoUpdate: true,
+        autoUpdate: { animationFrame: true },
       },
       abortController: this._popMenuAbortController,
       closeOnClickAway: true,
     });
     this._moreMenuOpen = true;
   }
+
+  closeCurrentMenu = () => {
+    if (this._currentOpenMenu && !this._currentOpenMenu.signal.aborted) {
+      this._currentOpenMenu.abort();
+      this._currentOpenMenu = null;
+    }
+  };
 
   override disconnectedCallback() {
     super.disconnectedCallback();

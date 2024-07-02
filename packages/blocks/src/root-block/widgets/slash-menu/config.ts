@@ -54,7 +54,7 @@ import { CanvasElementType } from '../../../surface-block/index.js';
 import { getSurfaceBlock } from '../../../surface-ref-block/utils.js';
 import type { RootBlockComponent } from '../../types.js';
 import type { AffineLinkedDocWidget } from '../linked-doc/index.js';
-import { type SlashMenuTooltip, slashMenuToolTips } from './tooltips.js';
+import { type SlashMenuTooltip, slashMenuToolTips } from './tooltips/index.js';
 import {
   createDatabaseBlockInNextLine,
   formatDate,
@@ -70,7 +70,8 @@ export type SlashMenuConfig = {
   triggerKeys: string[];
   ignoreBlockTypes: BlockSuite.Flavour[];
   items: SlashMenuItem[];
-  maxHeight: 344;
+  maxHeight: number;
+  tooltipTimeout: number;
 };
 
 export type SlashMenuStaticConfig = Omit<SlashMenuConfig, 'items'> & {
@@ -120,9 +121,10 @@ export type SlashMenuContext = {
 };
 
 export const defaultSlashMenuConfig: SlashMenuConfig = {
-  triggerKeys: ['/'],
+  triggerKeys: ['/', '、'],
   ignoreBlockTypes: ['affine:code'],
   maxHeight: 344,
+  tooltipTimeout: 800,
   items: [
     // ---------------------------------------------------------
     { groupName: 'Basic' },
@@ -186,7 +188,8 @@ export const defaultSlashMenuConfig: SlashMenuConfig = {
         ...createConversionItem(config),
         showWhen: ({ model }) =>
           model.doc.schema.flavourSchemaMap.has(config.flavour) &&
-          !insideDatabase(model),
+          !insideDatabase(model) &&
+          !insideEdgelessText(model),
       })),
 
     // ---------------------------------------------------------
@@ -385,7 +388,7 @@ export const defaultSlashMenuConfig: SlashMenuConfig = {
       name: 'GitHub',
       description: 'Link to a GitHub repository.',
       icon: GithubIcon,
-      tooltip: slashMenuToolTips['GitHub'],
+      tooltip: slashMenuToolTips['Github'],
       showWhen: ({ model }) =>
         model.doc.schema.flavourSchemaMap.has('affine:embed-github') &&
         !insideDatabase(model),

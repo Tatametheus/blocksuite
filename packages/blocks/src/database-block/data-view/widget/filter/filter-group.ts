@@ -1,17 +1,13 @@
 import './condition.js';
 
 import { ShadowlessElement, WithDisposable } from '@blocksuite/block-std';
-import type { ReferenceElement } from '@floating-ui/dom';
 import type { TemplateResult } from 'lit';
 import { css, html, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
-import {
-  eventToVRect,
-  popFilterableSimpleMenu,
-} from '../../../../_common/components/index.js';
+import { popFilterableSimpleMenu } from '../../../../_common/components/index.js';
 import {
   ArrowDownSmallIcon,
   DuplicateIcon,
@@ -28,6 +24,10 @@ import { popAddNewFilter } from './condition.js';
 
 @customElement('filter-group-view')
 export class FilterGroupView extends WithDisposable(ShadowlessElement) {
+  private get isMaxDepth() {
+    return this.depth === 3;
+  }
+
   static override styles = css`
     filter-group-view {
       border-radius: 4px;
@@ -153,6 +153,11 @@ export class FilterGroupView extends WithDisposable(ShadowlessElement) {
     }
   `;
 
+  private opMap = {
+    and: 'And',
+    or: 'Or',
+  };
+
   @property({ attribute: false })
   accessor depth = 1;
 
@@ -165,10 +170,13 @@ export class FilterGroupView extends WithDisposable(ShadowlessElement) {
   @property({ attribute: false })
   accessor setData!: (filter: FilterGroup) => void;
 
-  private opMap = {
-    and: 'And',
-    or: 'Or',
-  };
+  @state()
+  accessor containerClass:
+    | {
+        index: number;
+        class: string;
+      }
+    | undefined = undefined;
 
   private _setFilter = (index: number, filter: Filter) => {
     this.setData({
@@ -187,7 +195,7 @@ export class FilterGroupView extends WithDisposable(ShadowlessElement) {
       });
       return;
     }
-    popAddNewFilter(eventToVRect(e), {
+    popAddNewFilter(e.target as HTMLElement, {
       value: this.data,
       onChange: this.setData,
       vars: this.vars,
@@ -195,7 +203,7 @@ export class FilterGroupView extends WithDisposable(ShadowlessElement) {
   };
 
   private _selectOp = (event: MouseEvent) => {
-    popFilterableSimpleMenu(eventToVRect(event), [
+    popFilterableSimpleMenu(event.target as HTMLElement, [
       {
         type: 'action',
         name: 'And',
@@ -219,15 +227,7 @@ export class FilterGroupView extends WithDisposable(ShadowlessElement) {
     ]);
   };
 
-  @state()
-  accessor containerClass:
-    | {
-        index: number;
-        class: string;
-      }
-    | undefined = undefined;
-
-  private _clickConditionOps(target: ReferenceElement, i: number) {
+  private _clickConditionOps(target: HTMLElement, i: number) {
     const filter = this.data.conditions[i];
     popFilterableSimpleMenu(target, [
       {
@@ -291,10 +291,6 @@ export class FilterGroupView extends WithDisposable(ShadowlessElement) {
     ]);
   }
 
-  private get isMaxDepth() {
-    return this.depth === 3;
-  }
-
   override render() {
     const data = this.data;
     return html`
@@ -303,7 +299,7 @@ export class FilterGroupView extends WithDisposable(ShadowlessElement) {
           const clickOps = (e: MouseEvent) => {
             e.stopPropagation();
             e.preventDefault();
-            this._clickConditionOps(eventToVRect(e), i);
+            this._clickConditionOps(e.target as HTMLElement, i);
           };
           let op: TemplateResult;
           if (i === 0) {

@@ -11,8 +11,8 @@ import { css, html, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 import { ArrowDownSmallIcon } from '../../../../../_common/icons/text.js';
-import type { EdgelessTool } from '../../../../../_common/types.js';
 import { once } from '../../../../../_common/utils/event.js';
+import type { EdgelessTool } from '../../../types.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 import { TemplateCard1, TemplateCard2, TemplateCard3 } from './icon.js';
 import type { EdgelessTemplatePanel } from './template-panel.js';
@@ -21,10 +21,6 @@ import type { EdgelessTemplatePanel } from './template-panel.js';
 export class EdgelessTemplateButton extends EdgelessToolbarToolMixin(
   LitElement
 ) {
-  override type: EdgelessTool['type'] = 'template';
-
-  override enableActiveBackground = true;
-
   static override styles = css`
     :host {
       position: relative;
@@ -124,6 +120,10 @@ export class EdgelessTemplateButton extends EdgelessToolbarToolMixin(
   private _cleanup: (() => void) | null = null;
 
   private _prevTool: EdgelessTool | null = null;
+
+  override type: EdgelessTool['type'] = 'template';
+
+  override enableActiveBackground = true;
 
   private _togglePanel() {
     if (this._openedPanel) {

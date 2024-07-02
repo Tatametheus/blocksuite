@@ -5,7 +5,7 @@ import {
   EdgelessEraserDarkIcon,
   EdgelessEraserLightIcon,
 } from '../../../../../_common/icons/index.js';
-import type { EdgelessTool } from '../../../../../_common/utils/index.js';
+import type { EdgelessTool } from '../../../types.js';
 import { getTooltipWithShortcut } from '../../utils.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 
@@ -13,10 +13,6 @@ import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 export class EdgelessEraserToolButton extends EdgelessToolbarToolMixin(
   LitElement
 ) {
-  override type: EdgelessTool['type'] = 'eraser';
-
-  override enableActiveBackground = true;
-
   static override styles = css`
     :host {
       height: 100%;
@@ -40,16 +36,22 @@ export class EdgelessEraserToolButton extends EdgelessToolbarToolMixin(
     }
   `;
 
+  override type: EdgelessTool['type'] = 'eraser';
+
+  override enableActiveBackground = true;
+
   override firstUpdated() {
-    this.edgeless.bindHotKey(
-      {
-        Escape: () => {
-          if (this.edgelessTool.type === 'eraser') {
-            this.setEdgelessTool({ type: 'default' });
-          }
+    this.disposables.add(
+      this.edgeless.bindHotKey(
+        {
+          Escape: () => {
+            if (this.edgelessTool.type === 'eraser') {
+              this.setEdgelessTool({ type: 'default' });
+            }
+          },
         },
-      },
-      { global: true }
+        { global: true }
+      )
     );
   }
 

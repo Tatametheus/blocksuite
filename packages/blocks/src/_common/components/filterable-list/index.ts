@@ -7,7 +7,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { PAGE_HEADER_HEIGHT } from '../../consts.js';
 import { DoneIcon } from '../../icons/database.js';
 import { SearchIcon } from '../../icons/text.js';
-import { createLitPortal } from '../portal.js';
+import { type AdvancedPortalOptions, createLitPortal } from '../portal.js';
 import { filterableListStyles } from './styles.js';
 import type { FilterableListItem, FilterableListOptions } from './types.js';
 
@@ -18,6 +18,18 @@ export class FilterableListComponent<Props = unknown> extends WithDisposable(
   LitElement
 ) {
   static override styles = filterableListStyles;
+
+  @query('#filter-input')
+  private accessor _filterInput!: HTMLInputElement;
+
+  @query('.filterable-item.focussed')
+  private accessor _focussedItem!: HTMLElement | null;
+
+  @state()
+  private accessor _filterText = '';
+
+  @state()
+  private accessor _curFocusIndex = 0;
 
   @property({ attribute: false })
   accessor placement: Placement | undefined = undefined;
@@ -32,25 +44,6 @@ export class FilterableListComponent<Props = unknown> extends WithDisposable(
 
   @property({ attribute: false })
   accessor options!: FilterableListOptions<Props>;
-
-  @query('#filter-input')
-  private accessor _filterInput!: HTMLInputElement;
-
-  @query('.filterable-item.focussed')
-  private accessor _focussedItem!: HTMLElement | null;
-
-  @state()
-  private accessor _filterText = '';
-
-  @state()
-  private accessor _curFocusIndex = 0;
-
-  override connectedCallback() {
-    super.connectedCallback();
-    requestAnimationFrame(() => {
-      this._filterInput.focus();
-    });
-  }
 
   private _filterItems() {
     const searchFilter = !this._filterText
@@ -101,7 +94,7 @@ export class FilterableListComponent<Props = unknown> extends WithDisposable(
           })}
           @mouseover=${() => (this._curFocusIndex = idx)}
           @click=${() => this._select(item)}
-          ?hover=${focussed}
+          hover=${focussed}
           width="100%"
           height="32px"
         >
@@ -111,6 +104,13 @@ export class FilterableListComponent<Props = unknown> extends WithDisposable(
           </div>
         </icon-button>
       `;
+    });
+  }
+
+  override connectedCallback() {
+    super.connectedCallback();
+    requestAnimationFrame(() => {
+      this._filterInput.focus();
     });
   }
 
@@ -181,6 +181,7 @@ export function showPopFilterableList({
   referenceElement,
   container,
   maxHeight = 440,
+  portalStyles,
 }: {
   options: FilterableListComponent['options'];
   referenceElement: Element;
@@ -188,6 +189,7 @@ export function showPopFilterableList({
   abortController?: AbortController;
   filter?: FilterableListComponent['listFilter'];
   maxHeight?: number;
+  portalStyles?: AdvancedPortalOptions['portalStyles'];
 }) {
   const portalPadding = {
     top: PAGE_HEADER_HEIGHT + 12,
@@ -209,6 +211,7 @@ export function showPopFilterableList({
       return list;
     },
     container,
+    portalStyles,
     computePosition: {
       referenceElement,
       placement: 'bottom-start',

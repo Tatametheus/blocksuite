@@ -3,7 +3,6 @@ import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
-import { positionToVRect } from '../../../../../../_common/components/index.js';
 import { ArrowDownIcon } from '../../../../../../_common/icons/index.js';
 import { getRootByElement } from '../../../../../../_common/utils/index.js';
 import {
@@ -55,14 +54,46 @@ const styles = css`
 export class DatabaseColumnStatsCell extends WithDisposable(LitElement) {
   static override styles = styles;
 
-  @property({ attribute: false })
-  accessor column!: DataViewTableColumnManager;
-
   @state()
   private accessor operation: StatCalcOp | null = null;
 
   @state()
   private accessor result: StatOpResult | null = null;
+
+  @property({ attribute: false })
+  accessor column!: DataViewTableColumnManager;
+
+  private getResultString() {
+    if (!this.result || !isFinite(this.result.value)) return '';
+    const { displayFormat: df, value } = this.result;
+
+    switch (df) {
+      case '%':
+        return `${(value * 100).toFixed(3)}%`;
+      case 'x10':
+        return `${value}`;
+    }
+  }
+
+  protected override render() {
+    const style = {
+      width: `${this.column.width}px`,
+    };
+    return html`<div
+      calculated="${!!this.operation && this.operation.type !== 'none'}"
+      style="${styleMap(style)}"
+      class="stats-cell"
+    >
+      <div class="content">
+        ${!this.operation || this.operation.type === 'none'
+          ? html`Calculate ${ArrowDownIcon}`
+          : html`
+              <span class="label">${this.operation.display}</span>
+              <span class="value">${this.getResultString()} </span>
+            `}
+      </div>
+    </div>`;
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -87,43 +118,11 @@ export class DatabaseColumnStatsCell extends WithDisposable(LitElement) {
     });
   }
 
-  protected override render() {
-    const style = {
-      width: `${this.column.width}px`,
-    };
-    return html`<div
-      calculated="${!!this.operation && this.operation.type !== 'none'}"
-      style="${styleMap(style)}"
-      class="stats-cell"
-    >
-      <div class="content">
-        ${!this.operation || this.operation.type === 'none'
-          ? html`Calculate ${ArrowDownIcon}`
-          : html`
-              <span class="label">${this.operation.display}</span>
-              <span class="value">${this.getResultString()} </span>
-            `}
-      </div>
-    </div>`;
-  }
-
-  private getResultString() {
-    if (!this.result || !isFinite(this.result.value)) return '';
-    const { displayFormat: df, value } = this.result;
-
-    switch (df) {
-      case '%':
-        return `${(value * 100).toFixed(3)}%`;
-      case 'x10':
-        return `${value}`;
-    }
-  }
-
   openMenu = (ev: MouseEvent) => {
     const rootElement = getRootByElement(this);
     popColStatOperationMenu(
       rootElement,
-      positionToVRect(ev.x, ev.y),
+      ev.target as HTMLElement,
       this.column,
       this.getColumnType(),
       this.onSelect

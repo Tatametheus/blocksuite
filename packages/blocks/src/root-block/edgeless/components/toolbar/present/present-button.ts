@@ -2,7 +2,7 @@ import { css, html, LitElement } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { FrameNavigatorIcon } from '../../../../../_common/icons/edgeless.js';
-import type { EdgelessTool } from '../../../../../_common/types.js';
+import type { EdgelessTool } from '../../../types.js';
 import { QuickToolMixin } from '../mixins/quick-tool.mixin.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 
@@ -10,8 +10,6 @@ import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 export class EdgelessPresentButton extends QuickToolMixin(
   EdgelessToolbarToolMixin(LitElement)
 ) {
-  override type: EdgelessTool['type'] = 'frameNavigator';
-
   static override styles = css`
     :host {
       display: flex;
@@ -27,6 +25,8 @@ export class EdgelessPresentButton extends QuickToolMixin(
       font-size: 0;
     }
   `;
+
+  override type: EdgelessTool['type'] = 'frameNavigator';
 
   override render() {
     return html`<edgeless-tool-icon-button

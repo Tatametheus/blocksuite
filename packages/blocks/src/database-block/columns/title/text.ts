@@ -73,13 +73,6 @@ const styles = css`
 `;
 
 abstract class BaseTextCell extends BaseCellRenderer<Text> {
-  override accessor view!: DataViewTableManager | DataViewKanbanManager;
-
-  static override styles = styles;
-
-  @property({ attribute: false })
-  accessor showIcon = false;
-
   get service() {
     return this.view
       .getContext(HostContextKey)
@@ -110,15 +103,22 @@ abstract class BaseTextCell extends BaseCellRenderer<Text> {
     return this.view.columnGet(columnId);
   }
 
-  @query('rich-text')
-  accessor richText!: RichText;
-
   get inlineEditor() {
     assertExists(this.richText);
     const inlineEditor = this.richText.inlineEditor;
     assertExists(inlineEditor);
     return inlineEditor;
   }
+
+  static override styles = styles;
+
+  override accessor view!: DataViewTableManager | DataViewKanbanManager;
+
+  @property({ attribute: false })
+  accessor showIcon = false;
+
+  @query('rich-text')
+  accessor richText!: RichText;
 
   renderIcon() {
     if (!this.showIcon) {
@@ -141,7 +141,6 @@ export class HeaderAreaTextCell extends BaseTextCell {
     return html`${this.renderIcon()}
       <rich-text
         .yText=${this.value}
-        .inlineEventSource=${this.topContenteditableElement}
         .attributesSchema=${this.attributesSchema}
         .attributeRenderer=${this.attributeRenderer}
         .embedChecker=${this.inlineManager?.embedChecker}
@@ -154,9 +153,110 @@ export class HeaderAreaTextCell extends BaseTextCell {
 
 @customElement('data-view-header-area-text-editing')
 export class HeaderAreaTextCellEditing extends BaseTextCell {
+  private _onCopy = (e: ClipboardEvent) => {
+    const inlineEditor = this.inlineEditor;
+    assertExists(inlineEditor);
+
+    const inlineRange = inlineEditor.getInlineRange();
+    if (!inlineRange) return;
+
+    const text = inlineEditor.yTextString.slice(
+      inlineRange.index,
+      inlineRange.index + inlineRange.length
+    );
+
+    e.clipboardData?.setData('text/plain', text);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  private get std() {
+    const host = this.view.getContext(HostContextKey);
+    return host?.std;
+  }
+
+  private _onCut = (e: ClipboardEvent) => {
+    const inlineEditor = this.inlineEditor;
+    assertExists(inlineEditor);
+
+    const inlineRange = inlineEditor.getInlineRange();
+    if (!inlineRange) return;
+
+    const text = inlineEditor.yTextString.slice(
+      inlineRange.index,
+      inlineRange.index + inlineRange.length
+    );
+    inlineEditor.deleteText(inlineRange);
+    inlineEditor.setInlineRange({
+      index: inlineRange.index,
+      length: 0,
+    });
+
+    e.clipboardData?.setData('text/plain', text);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  private _onPaste = async (e: ClipboardEvent) => {
+    const inlineEditor = this.inlineEditor;
+    assertExists(inlineEditor);
+
+    const inlineRange = inlineEditor.getInlineRange();
+    if (!inlineRange) return;
+
+    const text = e.clipboardData
+      ?.getData('text/plain')
+      ?.replace(/\r?\n|\r/g, '\n');
+    if (!text) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const std = this.std;
+    const result = await std?.spec
+      .getService('affine:page')
+      .quickSearchService?.searchDoc({
+        userInput: text,
+        skipSelection: true,
+      });
+    if (result) {
+      if ('docId' in result) {
+        const text = ' ';
+        inlineEditor.insertText(inlineRange, text, {
+          reference: {
+            type: 'LinkedPage',
+            pageId: result.docId,
+          },
+        });
+        inlineEditor.setInlineRange({
+          index: inlineRange.index + text.length,
+          length: 0,
+        });
+      }
+      if ('userInput' in result) {
+        const text = result.userInput;
+        inlineEditor.insertText(inlineRange, text, {
+          link: text,
+        });
+        inlineEditor.setInlineRange({
+          index: inlineRange.index + text.length,
+          length: 0,
+        });
+      }
+    } else {
+      inlineEditor.insertText(inlineRange, text);
+      inlineEditor.setInlineRange({
+        index: inlineRange.index + text.length,
+        length: 0,
+      });
+    }
+  };
+
   override firstUpdated(props: Map<string, unknown>) {
     super.firstUpdated(props);
-
+    this.disposables.addFromEvent(this.richText, 'copy', this._onCopy);
+    this.disposables.addFromEvent(this.richText, 'cut', this._onCut);
+    this.disposables.addFromEvent(this.richText, 'paste', e => {
+      this._onPaste(e).catch(console.error);
+    });
     this.richText.updateComplete
       .then(() => {
         this.inlineEditor.focusEnd();
@@ -203,6 +303,7 @@ export class HeaderAreaTextCellEditing extends BaseTextCell {
         .embedChecker=${this.inlineManager?.embedChecker}
         .markdownShortcutHandler=${this.inlineManager?.markdownShortcutHandler}
         .readonly=${this.readonly}
+        .enableClipboard=${false}
         .verticalScrollContainerGetter=${() =>
           this.topContenteditableElement?.host
             ? getViewportElement(this.topContenteditableElement.host)

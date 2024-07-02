@@ -1,12 +1,10 @@
 import '../../common/component/overflow/overflow.js';
 
-import type { ReferenceElement } from '@floating-ui/dom';
 import { css, html } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
 import {
-  eventToVRect,
   popFilterableSimpleMenu,
   popMenu,
 } from '../../../../_common/components/index.js';
@@ -24,6 +22,10 @@ import { WidgetBase } from '../widget-base.js';
 
 @customElement('data-view-header-views')
 export class DataViewHeaderViews extends WidgetBase {
+  get readonly() {
+    return this.viewSource.readonly;
+  }
+
   static override styles = css`
     data-view-header-views {
       height: 32px;
@@ -71,8 +73,8 @@ export class DataViewHeaderViews extends WidgetBase {
     }
   `;
 
-  get readonly() {
-    return this.viewSource.readonly;
+  private getRenderer(view: SingleViewSource) {
+    return this.viewSource.getViewMeta(view.view.mode).renderer;
   }
 
   _addViewMenu = (event: MouseEvent) => {
@@ -98,7 +100,7 @@ export class DataViewHeaderViews extends WidgetBase {
       ...views.map(v => {
         const openViewOption = (event: MouseEvent) => {
           event.stopPropagation();
-          this.openViewOption(eventToVRect(event), v.view.id);
+          this.openViewOption(event.target as HTMLElement, v.view.id);
         };
         return {
           type: 'action' as const,
@@ -137,7 +139,7 @@ export class DataViewHeaderViews extends WidgetBase {
     ]);
   };
 
-  openViewOption = (target: ReferenceElement, id: string) => {
+  openViewOption = (target: HTMLElement, id: string) => {
     if (this.readonly) {
       return;
     }
@@ -227,7 +229,7 @@ export class DataViewHeaderViews extends WidgetBase {
       this.viewSource.selectView(id);
       return;
     }
-    this.openViewOption(eventToVRect(event), id);
+    this.openViewOption(event.target as HTMLElement, id);
   }
 
   override connectedCallback() {
@@ -280,10 +282,6 @@ export class DataViewHeaderViews extends WidgetBase {
       `;
     });
   };
-
-  private getRenderer(view: SingleViewSource) {
-    return this.viewSource.getViewMeta(view.view.mode).renderer;
-  }
 
   override render() {
     return html`

@@ -8,7 +8,10 @@ import { matchFlavours } from '../../_common/utils/model.js';
 import type { FrameBlockModel } from '../../frame-block/frame-model.js';
 import { EdgelessBlockModel } from '../../root-block/edgeless/edgeless-block-model.js';
 import { Bound } from '../../surface-block/utils/bound.js';
-import { SurfaceElementModel } from '../element-model/base.js';
+import {
+  SurfaceElementModel,
+  SurfaceGroupLikeModel,
+} from '../element-model/base.js';
 import type { GroupElementModel } from '../element-model/group.js';
 import { GridManager } from '../grid.js';
 import type { SurfaceBlockModel } from '../surface-model.js';
@@ -65,24 +68,6 @@ export type Layer = BlockLayer | CanvasLayer;
 
 export class LayerManager {
   static INITAL_INDEX = 'a0';
-
-  static create(doc: Doc, surface: SurfaceBlockModel) {
-    const layerManager = new LayerManager(
-      (
-        doc
-          .getBlocks()
-          .filter(
-            model =>
-              model instanceof EdgelessBlockModel &&
-              renderableInEdgeless(doc, surface, model)
-          ) as BlockSuite.EdgelessModelType[]
-      ).concat(surface.elementModels)
-    );
-
-    layerManager.listen(doc, surface);
-
-    return layerManager;
-  }
 
   private _disposables = new DisposableGroup();
 
@@ -174,7 +159,8 @@ export class LayerManager {
         if (
           payload.props['index'] ||
           payload.props['xywh'] ||
-          payload.props['externalXYWH']
+          payload.props['externalXYWH'] ||
+          payload.props['childIds']
         ) {
           this.update(surface.getElementById(payload.id)!, payload.props);
         }
@@ -572,6 +558,7 @@ export class LayerManager {
     const type = 'flavour' in element ? element.flavour : element.type;
 
     const indexChanged = !props || 'index' in props;
+    const childIdsChanged = props && 'childIds' in props;
     const updateArray = (
       array: BlockSuite.EdgelessModelType[],
       element: BlockSuite.EdgelessModelType
@@ -586,7 +573,10 @@ export class LayerManager {
       updateArray(this.canvasElements, element);
       this.canvasGrid.update(element as SurfaceElementModel);
 
-      if (type === 'group' && indexChanged) {
+      if (
+        (type === 'group' || element instanceof SurfaceGroupLikeModel) &&
+        (indexChanged || childIdsChanged)
+      ) {
         (element as GroupElementModel).childElements.forEach(
           child => child && this._updateLayer(child)
         );
@@ -600,7 +590,7 @@ export class LayerManager {
       this.blocksGrid.update(element as EdgelessBlockModel);
     }
 
-    if (updateType && indexChanged) {
+    if (updateType && (indexChanged || childIdsChanged)) {
       this._removeFromLayer(
         element as BlockSuite.EdgelessModelType,
         updateType
@@ -625,7 +615,7 @@ export class LayerManager {
       insertToOrderedArray(this.canvasElements, element);
       this.canvasGrid.add(element as SurfaceElementModel);
 
-      if (type === 'group') {
+      if (type === 'group' || element instanceof SurfaceGroupLikeModel) {
         (element as GroupElementModel).childElements.forEach(
           child => child && this._updateLayer(child)
         );
@@ -874,5 +864,23 @@ export class LayerManager {
   dispose() {
     this.slots.layerUpdated.dispose();
     this._disposables.dispose();
+  }
+
+  static create(doc: Doc, surface: SurfaceBlockModel) {
+    const layerManager = new LayerManager(
+      (
+        doc
+          .getBlocks()
+          .filter(
+            model =>
+              model instanceof EdgelessBlockModel &&
+              renderableInEdgeless(doc, surface, model)
+          ) as BlockSuite.EdgelessModelType[]
+      ).concat(surface.elementModels)
+    );
+
+    layerManager.listen(doc, surface);
+
+    return layerManager;
   }
 }

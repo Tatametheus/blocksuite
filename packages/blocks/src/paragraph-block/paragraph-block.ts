@@ -12,6 +12,7 @@ import { bindContainerHotkey } from '../_common/components/rich-text/keymap/inde
 import type { RichText } from '../_common/components/rich-text/rich-text.js';
 import { BLOCK_CHILDREN_CONTAINER_PADDING_LEFT } from '../_common/consts.js';
 import { getViewportElement } from '../_common/utils/query.js';
+import { EdgelessTextBlockComponent } from '../edgeless-text/edgeless-text-block.js';
 import { EdgelessRootBlockComponent } from '../root-block/edgeless/edgeless-root-block.js';
 import type { ParagraphBlockModel } from './paragraph-model.js';
 import type { ParagraphBlockService } from './paragraph-service.js';
@@ -22,10 +23,6 @@ export class ParagraphBlockComponent extends BlockComponent<
   ParagraphBlockModel,
   ParagraphBlockService
 > {
-  static override styles = paragraphBlockStyles;
-
-  override accessor blockContainerStyles = { margin: '10px 0' };
-
   get inlineManager() {
     const inlineManager = this.service?.inlineManager;
     assertExists(inlineManager);
@@ -48,16 +45,6 @@ export class ParagraphBlockComponent extends BlockComponent<
     return this.inlineManager.embedChecker;
   }
 
-  private _inlineRangeProvider: InlineRangeProvider | null = null;
-
-  @query('rich-text')
-  private accessor _richTextElement: RichText | null = null;
-
-  @query('.affine-paragraph-placeholder')
-  private accessor _placeholderContainer: HTMLElement | null = null;
-
-  private _currentTextSelection: TextSelection | undefined = undefined;
-
   override get topContenteditableElement() {
     if (this.rootElement instanceof EdgelessRootBlockComponent) {
       const el = this.closest<BlockElement>(
@@ -68,9 +55,64 @@ export class ParagraphBlockComponent extends BlockComponent<
     return this.rootElement;
   }
 
+  get inEdgelessText() {
+    return this.topContenteditableElement instanceof EdgelessTextBlockComponent;
+  }
+
   get inlineEditor() {
     return this._richTextElement?.inlineEditor;
   }
+
+  static override styles = paragraphBlockStyles;
+
+  private _inlineRangeProvider: InlineRangeProvider | null = null;
+
+  @query('rich-text')
+  private accessor _richTextElement: RichText | null = null;
+
+  @query('.affine-paragraph-placeholder')
+  private accessor _placeholderContainer: HTMLElement | null = null;
+
+  private _currentTextSelection: TextSelection | undefined = undefined;
+
+  override accessor blockContainerStyles = { margin: '10px 0' };
+
+  //TODO(@Flrande) wrap placeholder in `rich-text` or inline-editor to make it more developer-friendly
+  private _updatePlaceholder = () => {
+    if (
+      !this._placeholderContainer ||
+      !this._richTextElement ||
+      !this.inlineEditor
+    )
+      return;
+
+    const selection = this._currentTextSelection;
+    const isCollapsed = selection?.isCollapsed() ?? false;
+
+    if (
+      this.doc.readonly ||
+      this.inlineEditor.yTextLength > 0 ||
+      this.inlineEditor.isComposing ||
+      !this.selected ||
+      !isCollapsed ||
+      this._isInDatabase()
+    ) {
+      this._placeholderContainer.classList.remove('visible');
+    } else {
+      this._placeholderContainer.classList.add('visible');
+    }
+  };
+
+  private _isInDatabase = () => {
+    let parent = this.parentElement;
+    while (parent && parent !== document.body) {
+      if (parent.tagName.toLowerCase() === 'affine-database') {
+        return true;
+      }
+      parent = parent.parentElement;
+    }
+    return false;
+  };
 
   override async getUpdateComplete() {
     const result = await super.getUpdateComplete();
@@ -118,43 +160,6 @@ export class ParagraphBlockComponent extends BlockComponent<
       .catch(console.error);
   }
 
-  //TODO(@Flrande) wrap placeholder in `rich-text` or inline-editor to make it more developer-friendly
-  private _updatePlaceholder = () => {
-    if (
-      !this._placeholderContainer ||
-      !this._richTextElement ||
-      !this.inlineEditor
-    )
-      return;
-
-    const selection = this._currentTextSelection;
-    const isCollapsed = selection?.isCollapsed() ?? false;
-
-    if (
-      this.doc.readonly ||
-      this.inlineEditor.yTextLength > 0 ||
-      this.inlineEditor.isComposing ||
-      !this.selected ||
-      !isCollapsed ||
-      this._isInDatabase()
-    ) {
-      this._placeholderContainer.classList.remove('visible');
-    } else {
-      this._placeholderContainer.classList.add('visible');
-    }
-  };
-
-  private _isInDatabase = () => {
-    let parent = this.parentElement;
-    while (parent && parent !== document.body) {
-      if (parent.tagName.toLowerCase() === 'affine-database') {
-        return true;
-      }
-      parent = parent.parentElement;
-    }
-    return false;
-  };
-
   override renderBlock(): TemplateResult<1> {
     const { type } = this.model;
     const children = html`<div
@@ -182,9 +187,16 @@ export class ParagraphBlockComponent extends BlockComponent<
             .verticalScrollContainerGetter=${() =>
               getViewportElement(this.host)}
           ></rich-text>
-          <div contenteditable="false" class="affine-paragraph-placeholder">
-            ${this.service.placeholderGenerator(this.model)}
-          </div>
+          ${this.inEdgelessText
+            ? nothing
+            : html`
+                <div
+                  contenteditable="false"
+                  class="affine-paragraph-placeholder"
+                >
+                  ${this.service.placeholderGenerator(this.model)}
+                </div>
+              `}
         </div>
 
         ${children}

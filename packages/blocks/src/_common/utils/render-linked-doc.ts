@@ -23,28 +23,28 @@ import { SpecProvider } from '../../specs/utils/spec-provider.js';
 import { Bound, getCommonBound } from '../../surface-block/utils/bound.js';
 import { getSurfaceBlock } from '../../surface-ref-block/utils.js';
 import { EMBED_CARD_HEIGHT } from '../consts.js';
-import { NoteDisplayMode } from '../types.js';
+import { type DocMode, NoteDisplayMode } from '../types.js';
 import { getBlockProps } from './block-props.js';
 import { matchFlavours } from './model.js';
 
 export const embedNoteContentStyles = css`
   .affine-embed-doc-content-note-blocks affine-divider,
   .affine-embed-doc-content-note-blocks affine-divider > * {
-    margin-top: 0px;
-    margin-bottom: 0px;
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
     padding-top: 8px;
     padding-bottom: 8px;
   }
   .affine-embed-doc-content-note-blocks affine-paragraph,
   .affine-embed-doc-content-note-blocks affine-list {
-    margin-top: 4px;
-    margin-bottom: 4px;
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
     padding: 0 2px;
   }
   .affine-embed-doc-content-note-blocks affine-paragraph *,
   .affine-embed-doc-content-note-blocks affine-list * {
-    margin-top: 0px;
-    margin-bottom: 0px;
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
     padding-top: 0;
     padding-bottom: 0;
     line-height: 20px;
@@ -65,8 +65,8 @@ export const embedNoteContentStyles = css`
   .affine-embed-doc-content-note-blocks affine-paragraph:has(.h4),
   .affine-embed-doc-content-note-blocks affine-paragraph:has(.h5),
   .affine-embed-doc-content-note-blocks affine-paragraph:has(.h6) {
-    margin-top: 6px;
-    margin-bottom: 4px;
+    margin-top: 6px !important;
+    margin-bottom: 4px !important;
     padding: 0 2px;
   }
   .affine-embed-doc-content-note-blocks affine-paragraph:has(.h1) *,
@@ -75,8 +75,8 @@ export const embedNoteContentStyles = css`
   .affine-embed-doc-content-note-blocks affine-paragraph:has(.h4) *,
   .affine-embed-doc-content-note-blocks affine-paragraph:has(.h5) *,
   .affine-embed-doc-content-note-blocks affine-paragraph:has(.h6) * {
-    margin-top: 0px;
-    margin-bottom: 0px;
+    margin-top: 0px !important;
+    margin-bottom: 0px !important;
     padding-top: 0;
     padding-bottom: 0;
     line-height: 20px;
@@ -87,8 +87,8 @@ export const embedNoteContentStyles = css`
   .affine-embed-linked-doc-block.horizontal {
     affine-paragraph,
     affine-list {
-      margin-top: 0;
-      margin-bottom: 0;
+      margin-top: 0 !important;
+      margin-bottom: 0 !important;
       max-height: 40px;
       overflow: hidden;
       display: flex;
@@ -100,8 +100,8 @@ export const embedNoteContentStyles = css`
     }
     affine-paragraph .quote::after {
       height: 20px;
-      margin-top: 4px;
-      margin-bottom: 4px;
+      margin-top: 4px !important;
+      margin-bottom: 4px !important;
     }
   }
 `;
@@ -159,7 +159,7 @@ export function notifyDocCreated(host: EditorHost, doc: Doc) {
     accent: 'info',
     duration: 10 * 1000,
     action: {
-      label: 'undo',
+      label: 'Undo',
       onClick: () => {
         doc.undo();
         clear();
@@ -187,18 +187,47 @@ export function renderLinkedDocInCard(
   });
 }
 
-function getNotesFromDoc(linkedDoc: Doc) {
-  const note = linkedDoc.root?.children.filter(
+export function getNotesFromDoc(doc: Doc) {
+  const notes = doc.root?.children.filter(
     child =>
       matchFlavours(child, ['affine:note']) &&
       child.displayMode !== NoteDisplayMode.EdgelessOnly
   );
 
-  if (!note || !note.length) {
+  if (!notes || !notes.length) {
     return null;
   }
 
-  return note;
+  return notes;
+}
+
+export function isEmptyDoc(doc: Doc | null, mode: DocMode) {
+  if (!doc) {
+    return true;
+  }
+
+  if (mode === 'page') {
+    const notes = getNotesFromDoc(doc);
+    if (!notes || !notes.length) {
+      return true;
+    }
+    return notes.every(note => isEmptyNote(note));
+  } else {
+    const surface = getSurfaceBlock(doc);
+    if (surface?.elementModels.length || doc.blocks.size > 2) {
+      return false;
+    }
+    return true;
+  }
+}
+
+export function isEmptyNote(note: BlockModel) {
+  return note.children.every(block => {
+    return (
+      block.flavour === 'affine:paragraph' &&
+      (!block.text || block.text.length === 0)
+    );
+  });
 }
 
 function filterTextModel(model: BlockModel) {
@@ -226,7 +255,6 @@ async function renderNoteContent(
   if (!notes) {
     return;
   }
-  card.isNoteContentEmpty = false;
 
   const noteChildren = notes.flatMap(note =>
     note.children.filter(filterTextModel)
@@ -235,6 +263,8 @@ async function renderNoteContent(
   if (!noteChildren.length) {
     return;
   }
+
+  card.isNoteContentEmpty = false;
 
   const cardStyle = card.model.style;
 
@@ -518,14 +548,14 @@ export function createLinkedDocFromNote(
 }
 
 export function createLinkedDocFromEdgelessElements(
-  doc: Doc,
+  host: EditorHost,
   elements: BlockSuite.EdgelessModelType[],
   docTitle?: string
 ) {
-  const linkedDoc = doc.collection.createDoc({});
+  const linkedDoc = host.doc.collection.createDoc({});
   linkedDoc.load(() => {
     const rootId = linkedDoc.addBlock('affine:page', {
-      title: new doc.Text(docTitle),
+      title: new host.doc.Text(docTitle),
     });
     const surfaceId = linkedDoc.addBlock('affine:surface', {}, rootId);
     const surface = getSurfaceBlock(linkedDoc);
@@ -557,6 +587,7 @@ export function createLinkedDocFromEdgelessElements(
       ids.set(model.id, newId);
     });
   });
-
+  const pageService = host.spec.getService('affine:page');
+  pageService.docModeService.setMode('edgeless', linkedDoc.id);
   return linkedDoc;
 }

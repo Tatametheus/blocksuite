@@ -54,6 +54,10 @@ const styles = css`
 
 @customElement('affine-data-view-table-group')
 export class TableGroup extends WithDisposable(ShadowlessElement) {
+  get rows() {
+    return this.group?.rows ?? this.view.rows;
+  }
+
   static override styles = styles;
 
   @property({ attribute: false })
@@ -67,17 +71,6 @@ export class TableGroup extends WithDisposable(ShadowlessElement) {
 
   @property({ attribute: false })
   accessor group: GroupData | undefined = undefined;
-
-  get rows() {
-    return this.group?.rows ?? this.view.rows;
-  }
-
-  protected override updated(_changedProperties: PropertyValues) {
-    super.updated(_changedProperties);
-    this.querySelectorAll('data-view-table-row').forEach(ele => {
-      ele.requestUpdate();
-    });
-  }
 
   private clickAddRow = () => {
     this.view.rowAdd('end', this.group?.key);
@@ -142,9 +135,27 @@ export class TableGroup extends WithDisposable(ShadowlessElement) {
     ]);
   };
 
+  private renderGroupHeader = () => {
+    if (!this.group) {
+      return null;
+    }
+    return html`
+      <div
+        style="position: sticky;left: 0;width: max-content;padding: 6px 0;margin-bottom: 4px;display:flex;align-items:center;gap: 12px;max-width: 400px"
+      >
+        ${GroupTitle(this.group, {
+          readonly: this.view.readonly,
+          clickAdd: this.clickAddRowInStart,
+          clickOps: this.clickGroupOptions,
+        })}
+      </div>
+    `;
+  };
+
   private renderRows(ids: string[]) {
     return html`
       <affine-database-column-header
+        .renderGroupHeader="${this.renderGroupHeader}"
         .tableViewManager="${this.view}"
       ></affine-database-column-header>
       <div class="affine-database-block-rows">
@@ -186,22 +197,15 @@ export class TableGroup extends WithDisposable(ShadowlessElement) {
     `;
   }
 
+  protected override updated(_changedProperties: PropertyValues) {
+    super.updated(_changedProperties);
+    this.querySelectorAll('data-view-table-row').forEach(ele => {
+      ele.requestUpdate();
+    });
+  }
+
   override render() {
-    if (!this.group) {
-      return this.renderRows(this.view.rows);
-    }
-    return html`
-      <div
-        style="position: sticky;left: 0;width: max-content;padding: 6px 0;margin-bottom: 4px;display:flex;align-items:center;gap: 12px;max-width: 400px"
-      >
-        ${GroupTitle(this.group, {
-          readonly: this.view.readonly,
-          clickAdd: this.clickAddRowInStart,
-          clickOps: this.clickGroupOptions,
-        })}
-      </div>
-      ${this.renderRows(this.group.rows)}
-    `;
+    return this.renderRows(this.rows);
   }
 }
 

@@ -1,5 +1,4 @@
 import { ShadowlessElement, WithDisposable } from '@blocksuite/block-std';
-import type { ReferenceElement } from '@floating-ui/dom';
 import { css, html } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -166,6 +165,13 @@ export class DataViewPropertiesSettingView extends WithDisposable(
   @property({ attribute: false })
   accessor onBack: (() => void) | undefined = undefined;
 
+  @query('.properties-group')
+  accessor groupContainer!: HTMLElement;
+
+  private itemsGroup() {
+    return this.view.columnsWithoutFilter.map(id => this.view.columnGet(id));
+  }
+
   override connectedCallback() {
     super.connectedCallback();
     this._disposables.add(
@@ -177,9 +183,6 @@ export class DataViewPropertiesSettingView extends WithDisposable(
       e.stopPropagation();
     });
   }
-
-  @query('.properties-group')
-  accessor groupContainer!: HTMLElement;
 
   override firstUpdated() {
     const sortable = new Sortable(this.groupContainer, {
@@ -205,10 +208,6 @@ export class DataViewPropertiesSettingView extends WithDisposable(
     this._disposables.add({
       dispose: () => sortable.destroy(),
     });
-  }
-
-  private itemsGroup() {
-    return this.view.columnsWithoutFilter.map(id => this.view.columnGet(id));
   }
 
   renderColumn = (column: DataViewColumnManager) => {
@@ -273,7 +272,7 @@ declare global {
 }
 
 export const popPropertiesSetting = (
-  target: ReferenceElement,
+  target: HTMLElement,
   props: {
     view: DataViewManager;
     onClose?: () => void;

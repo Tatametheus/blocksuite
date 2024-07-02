@@ -5,6 +5,7 @@ import type {
   TextSelection,
 } from '@blocksuite/block-std';
 import { assertExists } from '@blocksuite/global/utils';
+import type { Text } from '@blocksuite/store';
 import {
   type BlockModel,
   type BlockSnapshot,
@@ -13,7 +14,6 @@ import {
   fromJSON,
   type JobMiddleware,
   type SliceSnapshot,
-  type Text,
 } from '@blocksuite/store';
 
 import { matchFlavours } from '../../../_common/utils/index.js';
@@ -98,18 +98,6 @@ class PasteTr {
       this.firstSnapshot.flavour === 'affine:paragraph' &&
       this.firstSnapshot.props.type === 'text';
   }
-
-  canMerge = () => {
-    const firstTextSnapshot = this._textFromSnapshot(this.firstSnapshot);
-    const lastTextSnapshot = this._textFromSnapshot(this.lastSnapshot);
-    return (
-      firstTextSnapshot &&
-      lastTextSnapshot &&
-      ((this.fromPointState.text.length > 0 &&
-        this.endPointState.text.length > 0) ||
-        this.firstSnapshotIsPlainText)
-    );
-  };
 
   private _textFromSnapshot = (snapshot: BlockSnapshot) => {
     return snapshot.props.text as Record<'delta', DeltaOperation[]>;
@@ -211,6 +199,18 @@ class PasteTr {
 
     firstTextSnapshot.delta = [...fromDelta, ...firstDelta];
     lastTextSnapshot.delta = [...lastDelta, ...toDelta];
+  };
+
+  canMerge = () => {
+    const firstTextSnapshot = this._textFromSnapshot(this.firstSnapshot);
+    const lastTextSnapshot = this._textFromSnapshot(this.lastSnapshot);
+    return (
+      firstTextSnapshot &&
+      lastTextSnapshot &&
+      ((this.fromPointState.text.length > 0 &&
+        this.endPointState.text.length > 0) ||
+        this.firstSnapshotIsPlainText)
+    );
   };
 
   pasted = () => {
@@ -320,6 +320,7 @@ class PasteTr {
     for (const blockSnapshot of this.snapshot.content) {
       if (blockSnapshot.props.text) {
         const text = this._textFromSnapshot(blockSnapshot);
+        const needToConvert = new Map<DeltaOperation, string>();
         for (const op of text.delta) {
           if (op.attributes?.link) {
             let docId = linkToDocId.get(op.attributes.link);
@@ -338,14 +339,43 @@ class PasteTr {
               }
             }
             if (docId) {
-              op.attributes.reference = {
-                pageId: docId,
-                type: 'LinkedPage',
-              };
-              op.insert = ' ';
-              delete op.attributes.link;
+              needToConvert.set(op, docId);
             }
           }
+        }
+        const delta = text.delta.map(op => {
+          if (needToConvert.has(op)) {
+            return {
+              ...op,
+              attributes: {
+                reference: {
+                  pageId: needToConvert.get(op),
+                  type: 'LinkedPage',
+                },
+              },
+              insert: ' ',
+            };
+          }
+          return {
+            ...op,
+          };
+        });
+        const model = std.doc.getBlockById(blockSnapshot.id);
+        if (model) {
+          std.spec
+            .getService('affine:page')
+            .telemetryService?.track('LinkedDocCreated', {
+              page: 'doc editor',
+              category: 'pasted link',
+              type: 'doc',
+              other: 'existing doc',
+            });
+          std.doc.captureSync();
+          std.doc.transact(() => {
+            const text = model.text as Text;
+            text.clear();
+            text.applyDelta(delta);
+          });
         }
       }
     }
@@ -361,7 +391,7 @@ function flatNote(snapshot: SliceSnapshot) {
 export const pasteMiddleware = (std: EditorHost['std']): JobMiddleware => {
   return ({ slots }) => {
     let tr: PasteTr | undefined;
-    slots.beforeImport.on(async payload => {
+    slots.beforeImport.on(payload => {
       if (payload.type === 'slice') {
         const { snapshot } = payload;
         flatNote(snapshot);
@@ -374,13 +404,13 @@ export const pasteMiddleware = (std: EditorHost['std']): JobMiddleware => {
         if (tr.canMerge()) {
           tr.merge();
         }
-        await tr.convertToLinkedDoc(std);
       }
     });
     slots.afterImport.on(payload => {
       if (tr && payload.type === 'slice') {
         tr.pasted();
         tr.focusPasted();
+        tr.convertToLinkedDoc(std).catch(console.error);
       }
     });
   };

@@ -20,61 +20,6 @@ export class BlockElement<
   Service extends BlockService = BlockService,
   WidgetName extends string = string,
 > extends WithDisposable(ShadowlessElement) {
-  @property({ attribute: false })
-  accessor host!: EditorHost;
-
-  @property({ attribute: false })
-  accessor model!: Model;
-
-  @property({ attribute: false })
-  accessor content: TemplateResult | null = null;
-
-  @property({ attribute: false })
-  accessor viewType: BlockViewType = BlockViewType.Display;
-
-  @property({
-    attribute: false,
-    hasChanged(value, oldValue) {
-      if (!value || !oldValue) {
-        return value !== oldValue;
-      }
-      // Is empty object
-      if (!Object.keys(value).length && !Object.keys(oldValue).length) {
-        return false;
-      }
-      return value !== oldValue;
-    },
-  })
-  accessor widgets!: Record<WidgetName, TemplateResult>;
-
-  @property({ attribute: false })
-  accessor doc!: Doc;
-
-  @property({ attribute: false })
-  accessor dirty = false;
-
-  @state({
-    hasChanged(value: BaseSelection | null, oldValue: BaseSelection | null) {
-      if (!value || !oldValue) {
-        return value !== oldValue;
-      }
-
-      return !value?.equals(oldValue);
-    },
-  })
-  accessor selected: BaseSelection | null = null;
-
-  service!: Service;
-
-  path!: string[];
-
-  @state()
-  protected accessor _renderers: Array<(content: unknown) => unknown> = [
-    this.renderBlock,
-    this._renderMismatchBlock,
-    this._renderViewType,
-  ];
-
   get parentBlockElement(): BlockElement {
     const el = this.parentElement;
     // TODO(mirone/#6534): find a better way to get block element from a node
@@ -146,42 +91,85 @@ export class BlockElement<
     return false;
   }
 
-  handleEvent = (
-    name: EventName,
-    handler: UIEventHandler,
-    options?: { global?: boolean; flavour?: boolean }
-  ) => {
-    assertExists(this.path, 'Cannot bind block level hotkey without path');
-    const config = {
-      flavour: options?.global
-        ? undefined
-        : options?.flavour
-          ? this.model.flavour
-          : undefined,
-      path: options?.global || options?.flavour ? undefined : this.path,
-    };
-    this._disposables.add(this.host.event.add(name, handler, config));
-  };
+  @state()
+  protected accessor _renderers: Array<(content: unknown) => unknown> = [
+    this.renderBlock,
+    this._renderMismatchBlock,
+    this._renderViewType,
+  ];
 
-  bindHotKey(
-    keymap: Record<string, UIEventHandler>,
-    options?: { global?: boolean; flavour?: boolean }
-  ) {
-    assertExists(this.path, 'Cannot bind block level hotkey without path');
-    const config = {
-      flavour: options?.global
-        ? undefined
-        : options?.flavour
-          ? this.model.flavour
-          : undefined,
-      path: options?.global || options?.flavour ? undefined : this.path,
-    };
-    this._disposables.add(this.host.event.bindHotkey(keymap, config));
+  @property({ attribute: false })
+  accessor host!: EditorHost;
+
+  @property({ attribute: false })
+  accessor model!: Model;
+
+  @property({ attribute: false })
+  accessor content: TemplateResult | null = null;
+
+  @property({ attribute: false })
+  accessor viewType: BlockViewType = BlockViewType.Display;
+
+  @property({
+    attribute: false,
+    hasChanged(value, oldValue) {
+      if (!value || !oldValue) {
+        return value !== oldValue;
+      }
+      // Is empty object
+      if (!Object.keys(value).length && !Object.keys(oldValue).length) {
+        return false;
+      }
+      return value !== oldValue;
+    },
+  })
+  accessor widgets!: Record<WidgetName, TemplateResult>;
+
+  @property({ attribute: false })
+  accessor doc!: Doc;
+
+  @property({ attribute: false })
+  accessor dirty = false;
+
+  @state({
+    hasChanged(value: BaseSelection | null, oldValue: BaseSelection | null) {
+      if (!value || !oldValue) {
+        return value !== oldValue;
+      }
+
+      return !value?.equals(oldValue);
+    },
+  })
+  accessor selected: BaseSelection | null = null;
+
+  service!: Service;
+
+  path!: string[];
+
+  private _renderViewType(content: unknown) {
+    return choose(this.viewType, [
+      [BlockViewType.Display, () => content],
+      [BlockViewType.Hidden, () => nothing],
+      [BlockViewType.Bypass, () => this.renderChildren(this.model)],
+    ]);
   }
 
-  renderChildren = (model: BlockModel): TemplateResult => {
-    return this.host.renderChildren(model);
-  };
+  private _renderMismatchBlock(content: unknown) {
+    return when(
+      this.isVersionMismatch,
+      () => {
+        const schema = this.doc.schema.flavourSchemaMap.get(this.model.flavour);
+        assertExists(
+          schema,
+          `Cannot find schema for flavour ${this.model.flavour}`
+        );
+        const expectedVersion = schema.version;
+        const actualVersion = this.model.version;
+        return this.renderVersionMismatch(expectedVersion, actualVersion);
+      },
+      () => content
+    );
+  }
 
   protected override async getUpdateComplete(): Promise<boolean> {
     const result = await super.getUpdateComplete();
@@ -217,6 +205,45 @@ export class BlockElement<
       super.update(changedProperties);
     }
   }
+
+  handleEvent = (
+    name: EventName,
+    handler: UIEventHandler,
+    options?: { global?: boolean; flavour?: boolean }
+  ) => {
+    assertExists(this.path, 'Cannot bind block level hotkey without path');
+    const config = {
+      flavour: options?.global
+        ? undefined
+        : options?.flavour
+          ? this.model.flavour
+          : undefined,
+      path: options?.global || options?.flavour ? undefined : this.path,
+    };
+    this._disposables.add(this.host.event.add(name, handler, config));
+  };
+
+  bindHotKey(
+    keymap: Record<string, UIEventHandler>,
+    options?: { global?: boolean; flavour?: boolean }
+  ) {
+    assertExists(this.path, 'Cannot bind block level hotkey without path');
+    const config = {
+      flavour: options?.global
+        ? undefined
+        : options?.flavour
+          ? this.model.flavour
+          : undefined,
+      path: options?.global || options?.flavour ? undefined : this.path,
+    };
+    const dispose = this.host.event.bindHotkey(keymap, config);
+    this._disposables.add(dispose);
+    return dispose;
+  }
+
+  renderChildren = (model: BlockModel): TemplateResult => {
+    return this.host.renderChildren(model);
+  };
 
   override connectedCallback() {
     super.connectedCallback();
@@ -303,31 +330,6 @@ export class BlockElement<
 
   addRenderer(renderer: (content: unknown) => unknown) {
     this._renderers.push(renderer);
-  }
-
-  private _renderViewType(content: unknown) {
-    return choose(this.viewType, [
-      [BlockViewType.Display, () => content],
-      [BlockViewType.Hidden, () => nothing],
-      [BlockViewType.Bypass, () => this.renderChildren(this.model)],
-    ]);
-  }
-
-  private _renderMismatchBlock(content: unknown) {
-    return when(
-      this.isVersionMismatch,
-      () => {
-        const schema = this.doc.schema.flavourSchemaMap.get(this.model.flavour);
-        assertExists(
-          schema,
-          `Cannot find schema for flavour ${this.model.flavour}`
-        );
-        const expectedVersion = schema.version;
-        const actualVersion = this.model.version;
-        return this.renderVersionMismatch(expectedVersion, actualVersion);
-      },
-      () => content
-    );
   }
 
   override render() {

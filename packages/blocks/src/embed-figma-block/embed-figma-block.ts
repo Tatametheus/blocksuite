@@ -1,5 +1,5 @@
 import { assertExists } from '@blocksuite/global/utils';
-import { html, nothing } from 'lit';
+import { html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
@@ -18,8 +18,6 @@ export class EmbedFigmaBlockComponent extends EmbedBlockElement<
 > {
   static override styles = styles;
 
-  override _cardStyle: (typeof EmbedFigmaStyles)[number] = 'figma';
-
   @state()
   private accessor _isSelected = false;
 
@@ -29,6 +27,8 @@ export class EmbedFigmaBlockComponent extends EmbedBlockElement<
   private _isDragging = false;
 
   private _isResizing = false;
+
+  override _cardStyle: (typeof EmbedFigmaStyles)[number] = 'figma';
 
   private _selectBlock() {
     const selectionManager = this.host.selection;
@@ -180,8 +180,6 @@ export class EmbedFigmaBlockComponent extends EmbedBlockElement<
             </div>
           </div>
         </div>
-
-        ${this.isInSurface ? nothing : Object.values(this.widgets)}
       `
     );
   }

@@ -3,6 +3,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { MindmapStyle } from '../../../../../surface-block/index.js';
+import { getTooltipWithShortcut } from '../../utils.js';
 import { EdgelessDraggableElementController } from '../common/draggable/draggable-element.controller.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 import { getMindMaps, type ToolbarMindmapItem } from './assets.js';
@@ -18,7 +19,9 @@ const textItem: TextItem = { type: 'text', icon: textIcon, render: textRender };
 
 @customElement('edgeless-mindmap-menu')
 export class EdgelessMindmapMenu extends EdgelessToolbarToolMixin(LitElement) {
-  override type = 'mindmap' as const;
+  get mindMaps() {
+    return getMindMaps(this.theme);
+  }
 
   static override styles = css`
     :host {
@@ -73,6 +76,8 @@ export class EdgelessMindmapMenu extends EdgelessToolbarToolMixin(LitElement) {
     }
   `;
 
+  override type = 'mindmap' as const;
+
   draggableController!: EdgelessDraggableElementController<
     ToolbarMindmapItem | TextItem
   >;
@@ -83,10 +88,6 @@ export class EdgelessMindmapMenu extends EdgelessToolbarToolMixin(LitElement) {
   @property({ attribute: false })
   accessor onActiveStyleChange!: (style: MindmapStyle) => void;
 
-  get mindMaps() {
-    return getMindMaps(this.theme);
-  }
-
   initDragController() {
     if (this.draggableController || !this.edgeless) return;
     this.draggableController = new EdgelessDraggableElementController(this, {
@@ -94,10 +95,22 @@ export class EdgelessMindmapMenu extends EdgelessToolbarToolMixin(LitElement) {
       edgeless: this.edgeless,
       scopeElement: this,
       clickToDrag: true,
+      onOverlayCreated: () => {
+        // a workaround to active mindmap, so that menu cannot be closed by `Escape`
+        this.setEdgelessTool({ type: 'mindmap' });
+      },
       onDrop: (element, bound) => {
-        element.data.render(bound, this.edgeless.service, this.edgeless);
+        const id = element.data.render(
+          bound,
+          this.edgeless.service,
+          this.edgeless
+        );
         if (element.data.type === 'mindmap') {
           this.onActiveStyleChange?.(element.data.style);
+          this.setEdgelessTool(
+            { type: 'default' },
+            { elements: [id], editing: false }
+          );
         }
       },
     });
@@ -140,6 +153,9 @@ export class EdgelessMindmapMenu extends EdgelessToolbarToolMixin(LitElement) {
           >
             ${textItem.icon}
           </button>
+          <affine-tooltip tip-position="top" .offset=${12}>
+            ${getTooltipWithShortcut('Edgeless Text', 'T')}
+          </affine-tooltip>
         </div>
         <div class="thin-divider"></div>
         <!-- mind map -->
@@ -179,6 +195,9 @@ export class EdgelessMindmapMenu extends EdgelessToolbarToolMixin(LitElement) {
               >
                 ${mindMap.icon}
               </button>
+              <affine-tooltip tip-position="top" .offset=${12}>
+                ${getTooltipWithShortcut('Mind Map', 'M')}
+              </affine-tooltip>
             </div>
           `;
         })}

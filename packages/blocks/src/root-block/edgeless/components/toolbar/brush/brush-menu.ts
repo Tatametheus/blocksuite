@@ -5,15 +5,13 @@ import '../common/slide-menu.js';
 import { css, html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import type { EdgelessTool } from '../../../../../_common/types.js';
+import type { EdgelessTool } from '../../../types.js';
 import type { ColorEvent } from '../../panel/color-panel.js';
 import type { LineWidthEvent } from '../../panel/line-width-panel.js';
 import { EdgelessToolbarToolMixin } from '../mixins/tool.mixin.js';
 
 @customElement('edgeless-brush-menu')
 export class EdgelessBrushMenu extends EdgelessToolbarToolMixin(LitElement) {
-  type: EdgelessTool['type'] = 'brush';
-
   static override styles = css`
     :host {
       display: flex;
@@ -31,6 +29,8 @@ export class EdgelessBrushMenu extends EdgelessToolbarToolMixin(LitElement) {
       margin: 0 9px;
     }
   `;
+
+  type: EdgelessTool['type'] = 'brush';
 
   @property({ attribute: false })
   accessor color!: string;
